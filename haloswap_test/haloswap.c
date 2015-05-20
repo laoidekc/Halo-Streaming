@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	int rank, size, reorder = 0, neighbour_left, neighbour_right, neighbour_up, neighbour_down, tag = 0, i, j;
-	double local_data[array_size+2], start_time, time, total = 0, checksum, average_time;
+	double local_data[array_size+2], start_time, time, total = 0, checksum;
 
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm, &rank);
@@ -23,13 +23,11 @@ int main(int argc, char *argv[])
 	MPI_Status status_left, status_right;
 	MPI_Request request_left, request_right;
 
-	printf("Neighbours of %i are %i,%i\n",rank,neighbour_left,neighbour_right);
-
 	srand(rank);
 
 	for(i=1;i<=array_size;i++)
 	{
-		local_data[i] = (double)(rand()%100);
+		local_data[i] = (double)i-1;
 	}
 
 	if(rank == 0)
@@ -65,7 +63,7 @@ int main(int argc, char *argv[])
 	{
 		time = MPI_Wtime() - start_time;
 		checksum = checksum/(size*array_size);
-		printf("Checksum = %lf\n",checksum);
+		printf("Checksum = %.10lf\n",checksum);
 		printf("Time taken = %lf seconds\n",time);
 	}
 
