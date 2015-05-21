@@ -1,0 +1,5 @@
+#!/bin/bash
+rm out.bin out.dat
+make
+mpiexec -n $1 ./halo_streaming
+hexdump -v -e '10/8 "%f "' -e '"\n"' < out.bin > out.dat
