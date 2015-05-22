@@ -5,8 +5,8 @@
 int main(int argc, char *argv[])
 {
 
-	int array_size = 100;
-	int iterations = 10;
+	int array_size = 100000;
+	int iterations = 100;
 
 	MPI_Init(NULL, NULL);
 
@@ -25,12 +25,12 @@ int main(int argc, char *argv[])
 	MPI_Status status_left, status_right, file_status;
 	MPI_Request request_left, request_right;
 
-	srand(rank);
-
 	for(i=1;i<=array_size;i++)
 	{
 		local_data[i] = (double)i-1;
 	}
+
+	MPI_Barrier(comm);
 
 	if(rank == 0)
 	{
@@ -58,19 +58,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	
-/*	for(i=1;i<=array_size;i++)
-	{
-		total += local_data[i];
-	}
-
-	MPI_Reduce(&total,&checksum,1,MPI_DOUBLE,MPI_SUM,0,comm);*/
+	MPI_Barrier(comm);
 
 	if (rank == 0)
 	{
 		time = MPI_Wtime() - start_time;
-//		checksum = checksum/(size*array_size);
-//		printf("Checksum = %.10lf\n",checksum);
 		printf("Halo exchange time taken = %lf seconds\n",time);
 	}
 
