@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <mpi.h>
+#include <stdlib.h>
 
 int main(int argc, char *argv[])
 {
@@ -10,8 +11,12 @@ int main(int argc, char *argv[])
 	int iterations = 20;
 	int send_buffer_size = 10;
 
-	int rank, size, i, j, location = array_size-2, tag;
-	double local_data[array_size+2], new[array_size], start_time, time, total = 0, checksum;
+	int rank, size, i, j, location = array_size-2, tag, leftover;
+	double *local_data, *new, *temporary, start_time, time, total = 0, checksum;
+
+	local_data = (double *)malloc((array_size+2)*sizeof(double));
+	new = (double *)malloc((array_size+2)*sizeof(double));
+
 
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm, &rank);
@@ -20,6 +25,8 @@ int main(int argc, char *argv[])
 	MPI_Status status[send_buffer_size], status_left, status_right, file_status;
 	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
 	MPI_File fh;
+	MPI_Datatype filetype;
+	MPI_Offset disp;
 
 	int neighbour_left = (rank + size - 1) % size;
 	int neighbour_right = (rank + 1) % size;
@@ -84,9 +91,7 @@ int main(int argc, char *argv[])
 	}
 	MPI_File_open(comm,"out.bin",amode,MPI_INFO_NULL,&fh);
 
-	int leftover = start_point + array_size - array_size*size;
-	MPI_Datatype filetype;
-	MPI_Offset disp;
+	leftover = start_point + array_size - array_size*size;
 
 	if(leftover > 0)
 	{
@@ -148,15 +153,14 @@ int main(int argc, char *argv[])
 		MPI_Wait(&request_left,&status_left);
 		MPI_Wait(&request_right,&status_right);
 
-		for(i=0;i<array_size;i++)
-		{
-			new[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
-		}
-
 		for(i=1;i<=array_size;i++)
 		{
-			local_data[i] = new[i-1];
+			new[i] = (local_data[i-1] + local_data[i] + local_data[i+1])/3;
 		}
+
+		temporary = new;
+		new = local_data;
+		local_data = temporary;
 	}
 
 	MPI_Barrier(comm);
@@ -176,6 +180,9 @@ int main(int argc, char *argv[])
 
 	MPI_File_write_all(fh,&local_data[1],array_size,MPI_DOUBLE,&file_status);
 	MPI_File_close(&fh);
+
+	free(local_data);
+	free(new);
 
 	MPI_Finalize();
 
