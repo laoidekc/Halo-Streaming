@@ -7,22 +7,22 @@ int main(int argc, char *argv[])
 {
 	MPI_Init(NULL, NULL);
 
-	int array_size = 100000;
-	int iterations = 20;
+	int array_size = 1000000;
+	int iterations = 1000;
 	int send_buffer_size = 10;
 
 	int rank, size, i, j, location = array_size-2, tag, leftover;
 	double *local_data, *new, *temporary, start_time, time, total = 0, checksum;
+	double send_buffer[2*send_buffer_size];
 
-	local_data = (double *)malloc((array_size+2)*sizeof(double));
-	new = (double *)malloc((array_size+2)*sizeof(double));
-
+	local_data = malloc((array_size+2)*sizeof(double));
+	new = malloc((array_size+2)*sizeof(double));
 
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
 	MPI_Request request[send_buffer_size], request_left, request_right;
-	MPI_Status status[send_buffer_size], status_left, status_right, file_status;
+	MPI_Status status_send[send_buffer_size], status_receive[send_buffer_size], status_left, status_right, file_status;
 	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
 	MPI_File fh;
 	MPI_Datatype filetype;
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 
 	for(tag=0;tag<send_buffer_size;tag++)
 	{
-		MPI_Send_init(&local_data[0],2,MPI_DOUBLE,neighbour_left,tag,comm,&request[tag]);	
+		MPI_Send_init(&send_buffer[2*tag],2,MPI_DOUBLE,neighbour_left,tag,comm,&request[tag]);	
 	}
 
 	tag = 0;
@@ -54,7 +54,9 @@ int main(int argc, char *argv[])
 
 	for(j=0;j<iterations;j++)
 	{
-		MPI_Wait(&request[tag],&status[tag]);
+		MPI_Wait(&request[tag],&status_send[tag]);
+		send_buffer[2*tag] = local_data[0];
+		send_buffer[2*tag+1] = local_data[1];
 		MPI_Start(&request[tag]);
 		tag = (tag + 1) % send_buffer_size;
 
@@ -64,6 +66,8 @@ int main(int argc, char *argv[])
 		}
 		location -= 2;
 	}
+	
+	MPI_Waitall(send_buffer_size,request,status_send);
 
 	start_point = (start_point + iterations) % (size*array_size);
 	location = array_size - 2;
@@ -71,7 +75,7 @@ int main(int argc, char *argv[])
 
 	for(j=0;j<iterations;j++)
 	{
-		MPI_Recv(&local_data[array_size],2,MPI_DOUBLE,neighbour_right,tag,comm,&status[tag]);
+		MPI_Recv(&local_data[array_size],2,MPI_DOUBLE,neighbour_right,tag,comm,&status_receive[tag]);
 		tag = (tag + 1) % send_buffer_size;
 
 		for(i=location;i<array_size;i++)
@@ -125,7 +129,7 @@ int main(int argc, char *argv[])
 	MPI_Type_commit(&filetype);
 	MPI_File_set_view(fh,disp,MPI_DOUBLE,filetype,"native",MPI_INFO_NULL);
 
-	MPI_File_write_all(fh,local_data,array_size,MPI_DOUBLE,&status[0]);
+	MPI_File_write_all(fh,local_data,array_size,MPI_DOUBLE,&file_status);
 
 	MPI_File_close(&fh);
 
