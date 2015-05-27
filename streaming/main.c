@@ -15,16 +15,19 @@ int main(int argc, char *argv[])
 	int halo_size = 2;
 
 	int rank, size, i, j, location = array_size-halo_size, tag, leftover;
-	double *local_data, *new, *temporary, *send_buffer, start_time, time;
+	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
 
 	local_data = malloc((array_size+halo_size)*sizeof(double));
 	new = malloc((array_size+halo_size)*sizeof(double));
 	send_buffer = malloc((halo_size*send_buffer_size)*sizeof(double));
+	receive_buffer = malloc((halo_size*send_buffer_size)*sizeof(double));
 
-	MPI_Comm comm = MPI_COMM_WORLD;
-	MPI_Comm_rank(comm, &rank);
-	MPI_Comm_size(comm, &size);
-	MPI_Request request[send_buffer_size], request_left, request_right;
+	MPI_Comm stream_comm = MPI_COMM_WORLD;
+	MPI_Comm exchange_comm;
+	MPI_Comm_dup(stream_comm,&exchange_comm);
+	MPI_Comm_rank(stream_comm, &rank);
+	MPI_Comm_size(stream_comm, &size);
+	MPI_Request request_send[send_buffer_size], request_receive[send_buffer_size], request_left, request_right;
 	MPI_Status status_send[send_buffer_size], status_receive[send_buffer_size], status_left, status_right, file_status;
 	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
 	MPI_File fh;
@@ -47,12 +50,18 @@ int main(int argc, char *argv[])
 	// Initialising persistent sends
 	for(tag=0;tag<send_buffer_size;tag++)
 	{
-		MPI_Send_init(&send_buffer[halo_size*tag],halo_size,MPI_DOUBLE,neighbour_left,tag,comm,&request[tag]);	
+		MPI_Send_init(&send_buffer[halo_size*tag],halo_size,MPI_DOUBLE,neighbour_left,tag,stream_comm,&request_send[tag]);	
+	}
+
+	// Initialising persistent receives
+	for(tag=0;tag<send_buffer_size;tag++)
+	{
+		MPI_Irecv(&receive_buffer[halo_size*tag],halo_size,MPI_DOUBLE,neighbour_right,tag,stream_comm,&request_receive[tag]);
 	}
 
 	tag = 0;
 
-	MPI_Barrier(comm);
+	MPI_Barrier(stream_comm);
 
 	// Beginning halo-streaming timing
 	if(rank == 0)
@@ -63,7 +72,7 @@ int main(int argc, char *argv[])
 	for(j=0;j<iterations;j++)
 	{
 		// Waiting for request to become available
-		MPI_Wait(&request[tag],&status_send[tag]);
+		MPI_Wait(&request_send[tag],&status_send[tag]);
 
 		// Copying data to send buffer 
 		for(i=0;i<halo_size;i++)
@@ -72,7 +81,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Sending data
-		MPI_Start(&request[tag]);
+		MPI_Start(&request_send[tag]);
 
 		// Changing tag
 		tag = (tag + 1) % send_buffer_size;
@@ -88,7 +97,7 @@ int main(int argc, char *argv[])
 	}
 	
 	// Waiting for all sends to complete (this may be unnecessary)
-	MPI_Waitall(send_buffer_size,request,status_send);
+	MPI_Waitall(send_buffer_size,request_send,status_send);
 
 	// Finding new position in global array
 	start_point = (start_point + iterations) % (size*array_size);
@@ -99,8 +108,17 @@ int main(int argc, char *argv[])
 
 	for(j=0;j<iterations;j++)
 	{
-		// Receiving data from neighbour
-		MPI_Recv(&local_data[array_size],halo_size,MPI_DOUBLE,neighbour_right,tag,comm,&status_receive[tag]);
+		// Waiting for receive to complete
+		MPI_Wait(&request_receive[tag], &status_receive[tag]);
+
+		// Copying data from receive buffer
+		for(i=0;i<halo_size;i++)
+		{
+			local_data[array_size+i] = receive_buffer[halo_size*tag+i];
+		}
+
+		// Issuing new non-blocking receive
+		MPI_Irecv(&receive_buffer[halo_size*tag],halo_size,MPI_DOUBLE,neighbour_right,tag,stream_comm,&request_receive[tag]);
 
 		// Changing tag
 		tag = (tag + 1) % send_buffer_size;
@@ -111,11 +129,11 @@ int main(int argc, char *argv[])
 			local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
 		}
 
-		// Changing the location where received data is stored
+		// Changing the range of data to update
 		location -= halo_size;
 	}
 
-	MPI_Barrier(comm);
+	MPI_Barrier(stream_comm);
 
 	// Ending halo-streaming timing
 	if (rank == 0)
@@ -125,7 +143,7 @@ int main(int argc, char *argv[])
 	}
 
 	// Opening file
-	MPI_File_open(comm,"out.bin",amode,MPI_INFO_NULL,&fh);
+	MPI_File_open(stream_comm,"out.bin",amode,MPI_INFO_NULL,&fh);
 
 	// Determing which process must write to both ends of the file
 	leftover = start_point + array_size - array_size*size;
@@ -182,7 +200,7 @@ int main(int argc, char *argv[])
 		local_data[i] = (double)i-1;
 	}
 
-	MPI_Barrier(comm);
+	MPI_Barrier(exchange_comm);
 
 	// Beginning timing for halo-exchange
 	if(rank == 0)
@@ -193,11 +211,11 @@ int main(int argc, char *argv[])
 	for(j=0;j<iterations;j++)
 	{
 		// Sending and receiving halos
-		MPI_Issend(&local_data[1],1,MPI_DOUBLE,neighbour_left,tag,comm,&request_left);
-		MPI_Issend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,tag,comm,&request_right);
+		MPI_Issend(&local_data[1],1,MPI_DOUBLE,neighbour_left,tag,exchange_comm,&request_left);
+		MPI_Issend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,tag,exchange_comm,&request_right);
 
-		MPI_Recv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,tag,comm,&status_right);
-		MPI_Recv(&local_data[0],1,MPI_DOUBLE,neighbour_left,tag,comm,&status_left);
+		MPI_Recv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,tag,exchange_comm,&status_right);
+		MPI_Recv(&local_data[0],1,MPI_DOUBLE,neighbour_left,tag,exchange_comm,&status_left);
 
 		MPI_Wait(&request_left,&status_left);
 		MPI_Wait(&request_right,&status_right);
@@ -214,7 +232,7 @@ int main(int argc, char *argv[])
 		local_data = temporary;
 	}
 
-	MPI_Barrier(comm);
+	MPI_Barrier(exchange_comm);
 
 	// Ending halo-exchange timing
 	if (rank == 0)
@@ -224,7 +242,7 @@ int main(int argc, char *argv[])
 	}
 
 	// Opening file
-	MPI_File_open(comm,"halo_out.bin",amode,MPI_INFO_NULL,&fh);
+	MPI_File_open(exchange_comm,"halo_out.bin",amode,MPI_INFO_NULL,&fh);
 	disp = rank*array_size*sizeof(double);
 
 	// Creating contiguous datatype
