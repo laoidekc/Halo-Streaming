@@ -35,11 +35,7 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(stream_comm, &rank);
 	MPI_Comm_size(stream_comm, &size);
 	MPI_Request request_send[send_buffer_size], request_receive[send_buffer_size], request_left, request_right;
-	MPI_Status status_send[send_buffer_size], status_receive[send_buffer_size], status_left, status_right, file_status;
-	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
-	MPI_File fh;
-	MPI_Datatype filetype;
-	MPI_Offset disp;
+	MPI_Status status_send[send_buffer_size], status_receive[send_buffer_size], status_left, status_right;
 
 	// Finding neighbours
 	int neighbour_left = (rank + size - 1) % size;
