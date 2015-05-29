@@ -3,6 +3,9 @@
 #include <mpi.h>
 #include <stdlib.h>
 
+void initialise_data(double*, int);
+void IO(int, int, int, double*, char*);
+
 int main(int argc, char *argv[])
 {
 	MPI_Init(NULL, NULL);
@@ -14,6 +17,9 @@ int main(int argc, char *argv[])
 	int send_buffer_size = 10;
 	int message_size = 10;
 	int halo_size = 2;
+
+	char stream_filename[20] = "out.bin";
+	char halo_filename[20] = "halo_out.bin";
 
 	int rank, size, i, j, location = array_size-halo_size, send_tag, receive_tag, leftover;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
@@ -43,10 +49,7 @@ int main(int argc, char *argv[])
 	int start_point = rank*array_size;
 
 	// Initialising local data
-	for(i=0;i<array_size;i++)
-	{
-		local_data[i] = (double)i;
-	}
+	initialise_data(local_data, array_size);
 
 	// Initialising non-blocking sends
 	for(send_tag=0;send_tag<send_buffer_size;send_tag++)
@@ -156,63 +159,10 @@ int main(int argc, char *argv[])
 		printf("Halo streaming time taken = %lf seconds\n",time);
 	}
 
-	// Opening file
-	MPI_File_open(stream_comm,"out.bin",amode,MPI_INFO_NULL,&fh);
-
-	// Determing which process must write to both ends of the file
-	leftover = start_point + array_size - array_size*size;
-
-	if(leftover > 0)
-	{
-		// Rearranging data before writing to file
-		disp = 0;
-		double temp[leftover];
-		for(i=0;i<leftover;i++)
-		{
-			temp[i] = local_data[array_size-leftover+i];
-		}
-
-		for(i=array_size-1;i>=leftover;i--)
-		{
-			local_data[i] = local_data[i - leftover];
-		}
-
-		for(i=0;i<leftover;i++)
-		{
-			local_data[i] = temp[i];
-		}
-
-		// Creating split datatype
-		int blocklengths[2] = {leftover,array_size-leftover};
-		int displacements[2] = {0,(size - 1)*array_size + leftover};
-		MPI_Type_indexed(2,blocklengths,displacements,MPI_DOUBLE,&filetype);
-	}
-
-	else
-	{
-		disp = start_point*sizeof(double);
-
-		// Creating contiguous datatype
-		MPI_Type_contiguous(array_size,MPI_DOUBLE,&filetype);
-	}
-
-	MPI_Type_commit(&filetype);
-
-	// Setting file view, writing to file, and closing file
-	MPI_File_set_view(fh,disp,MPI_DOUBLE,filetype,"native",MPI_INFO_NULL);
-
-	MPI_File_write_all(fh,local_data,array_size,MPI_DOUBLE,&file_status);
-
-	MPI_File_close(&fh);
-
-	MPI_Type_free(&filetype);
-
+	IO(start_point, array_size, size, local_data, stream_filename);
 
 	// Re-initialising data for halo-exchange
-	for(i=1;i<=array_size;i++)
-	{
-		local_data[i] = (double)i-1;
-	}
+	initialise_data(&local_data[halo_size/2],array_size);
 
 	MPI_Barrier(exchange_comm);
 
@@ -255,18 +205,9 @@ int main(int argc, char *argv[])
 		printf("Halo exchange time taken = %lf seconds\n",time);
 	}
 
-	// Opening file
-	MPI_File_open(exchange_comm,"halo_out.bin",amode,MPI_INFO_NULL,&fh);
-	disp = rank*array_size*sizeof(double);
+	start_point = array_size*rank;
 
-	// Creating contiguous datatype
-	MPI_Type_contiguous(array_size,MPI_DOUBLE,&filetype);
-	MPI_Type_commit(&filetype);
-
-	// Setting file view, writing to file, and closing file
-	MPI_File_set_view(fh,disp,MPI_DOUBLE,filetype,"native",MPI_INFO_NULL);
-	MPI_File_write_all(fh,&local_data[1],array_size,MPI_DOUBLE,&file_status);
-	MPI_File_close(&fh);
+	IO(start_point,array_size,size,&local_data[halo_size/2],halo_filename);
 
 	// Freeing arrays
 	free(local_data);
@@ -276,4 +217,73 @@ int main(int argc, char *argv[])
 	MPI_Finalize();
 
 	return;
+}
+
+void initialise_data(double *local_data, int array_size)
+{
+	int i;
+
+	for(i=0;i<array_size;i++)
+	{
+		local_data[i] = (double)i;
+	}
+}
+
+void IO(int start_point, int array_size, int size, double *local_data, char *filename)
+{
+	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
+	MPI_File fh;
+	MPI_Datatype filetype;
+	MPI_Offset disp;
+	MPI_Comm comm = MPI_COMM_WORLD;
+	int leftover = start_point + array_size - array_size*size;
+	int i;
+	MPI_Status file_status;
+
+	
+	if(leftover > 0)
+	{
+		// Rearranging data before writing to file
+		disp = 0;
+		double temp[leftover];
+		for(i=0;i<leftover;i++)
+		{
+			temp[i] = local_data[array_size-leftover+i];
+		}
+
+		for(i=array_size-1;i>=leftover;i--)
+		{
+			local_data[i] = local_data[i - leftover];
+		}
+
+		for(i=0;i<leftover;i++)
+		{
+			local_data[i] = temp[i];
+		}
+
+		// Creating split datatype
+		int blocklengths[2] = {leftover,array_size-leftover};
+		int displacements[2] = {0,(size - 1)*array_size + leftover};
+		MPI_Type_indexed(2,blocklengths,displacements,MPI_DOUBLE,&filetype);
+	}
+
+	else
+	{
+		disp = start_point*sizeof(double);
+
+		// Creating contiguous datatype
+		MPI_Type_contiguous(array_size,MPI_DOUBLE,&filetype);
+	}
+
+	MPI_Type_commit(&filetype);
+
+	MPI_File_open(comm,filename,amode,MPI_INFO_NULL,&fh);
+
+	MPI_File_set_view(fh,disp,MPI_DOUBLE,filetype,"native",MPI_INFO_NULL);
+
+	MPI_File_write_all(fh,local_data,array_size,MPI_DOUBLE,&file_status);
+
+	MPI_File_close(&fh);
+
+	MPI_Type_free(&filetype);
 }
