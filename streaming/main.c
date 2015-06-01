@@ -12,17 +12,23 @@ int main(int argc, char *argv[])
 
 
 	// Parameter declarations
-	int array_size = 1000000;
-	int iterations = 1000;
+	int array_size = 100000;
+	int iterations = 10000;
 	int send_buffer_size = 10;
 	int message_size = 10;
 	int halo_size = 2;
 
+	// Output files
 	char stream_filename[20] = "out.bin";
 	char halo_filename[20] = "halo_out.bin";
 
-	int rank, size, i, j, location = array_size-halo_size, send_tag, receive_tag, leftover;
+	int rank, size, i, j, location_send = array_size - halo_size, location_receive = array_size - halo_size, send_tag, receive_tag, leftover, flag;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
+
+	int send_buffer_space = send_buffer_size;
+	int receive_buffer_space = send_buffer_size;
+	int send_iterations = 0;
+	int receive_iterations = 0;
 
 	local_data = malloc((array_size+halo_size)*sizeof(double));
 	new = malloc((array_size+halo_size)*sizeof(double));
@@ -47,7 +53,7 @@ int main(int argc, char *argv[])
 	// Initialising local data
 	initialise_data(local_data, array_size);
 
-	// Initialising non-blocking sends
+	// Initialising persistent sends
 	for(send_tag=0;send_tag<send_buffer_size;send_tag++)
 	{
 		MPI_Send_init(&send_buffer[halo_size*message_size*send_tag],halo_size*message_size,MPI_DOUBLE,neighbour_left,send_tag,stream_comm,&request_send[send_tag]);	
@@ -60,6 +66,7 @@ int main(int argc, char *argv[])
 	}
 
 	send_tag = 0;
+	receive_tag = 0;
 
 	MPI_Barrier(stream_comm);
 
@@ -69,38 +76,59 @@ int main(int argc, char *argv[])
 		start_time = MPI_Wtime();
 	}
 
-	for(j=0;j<iterations;j++)
+	for(send_iterations=0;send_iterations<iterations;send_iterations+=message_size)
 	{
-
-		if(j%message_size==0)
+		// Waiting for request to become available
+		MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
+		
+		for(j=0;j<message_size;j++)
 		{
-			// Waiting for request to become available
-			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
+			// Copying data to send buffer 
+			for(i=0;i<halo_size;i++)
+			{
+				send_buffer[halo_size*message_size*send_tag+j*halo_size+i] = local_data[i];
+			}
+
+			// Updating all possible values (in place)
+			for(i=0;i<location_send;i++)
+			{
+				local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
+			}
+
+			// Reducing the number of values that can be updated during the next iteration
+			location_send -= halo_size;
 		}
 
-		// Copying data to send buffer 
-		for(i=0;i<halo_size;i++)
-		{
-			send_buffer[halo_size*message_size*send_tag+(j%message_size)*halo_size+i] = local_data[i];
-		}
-
-		// Sending data
-		if((j+1)%message_size==0)
-		{
-			MPI_Start(&request_send[send_tag]);
+		MPI_Start(&request_send[send_tag]);
 			
-			// Changing tag
-			send_tag = (send_tag + 1) % send_buffer_size;
-		}
+		// Changing tag
+		send_tag = (send_tag + 1) % send_buffer_size;
 
-		// Updating all possible values (in place)
-		for(i=0;i<location;i++)
+		MPI_Test(&request_receive[receive_tag],&flag,&status_receive[receive_tag]);
+		
+		if(flag)
 		{
-			local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
-		}
+			for(j=0;j<message_size;j++)
+			{
+				for(i=0;i<halo_size;i++)
+				{
+					local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+j*halo_size+i];
+				}
 
-		// Reducing the number of values that can be updated during the next iteration
-		location -= halo_size;
+				for(i=location_receive;i<array_size;i++)
+				{
+					local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
+				}
+
+				location_receive -= halo_size;
+			}
+
+			MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+
+			receive_tag = (receive_tag + 1) % send_buffer_size;
+
+			receive_iterations += message_size;
+		}
 	}
 	
 	// Waiting for all sends to complete (this may be unnecessary)
@@ -109,41 +137,30 @@ int main(int argc, char *argv[])
 	// Finding new position in global array
 	start_point = (start_point + iterations) % (size*array_size);
 
-	// Finding the point where data will be updated
-	location = array_size - halo_size;
-	receive_tag = 0;
-
-	for(j=0;j<iterations;j++)
+	for(;receive_iterations<iterations;receive_iterations+=message_size)
 	{
-		if(j%message_size==0)
+
+		// Waiting for receive to complete
+		MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
+
+		for(j=0;j<message_size;j++)
 		{
-			// Waiting for receive to complete
-			MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
+			for(i=0;i<halo_size;i++)
+			{
+				local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+j*halo_size+i];
+			}
+
+			for(i=location_receive;i<array_size;i++)
+			{
+				local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
+			}
+
+			location_receive -= halo_size;
 		}
 
-		// Copying data from receive buffer
-		for(i=0;i<halo_size;i++)
-		{
-			local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+(j%message_size)*halo_size+i];
-		}
+		MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
 
-		if((j+1)%message_size==0)
-		{
-			// Issuing new non-blocking receive
-			MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
-
-			// Changing tag
-			receive_tag = (receive_tag + 1) % send_buffer_size;
-		}
-
-		// Updating in place based on new data
-		for(i=location;i<array_size;i++)
-		{
-			local_data[i] = (local_data[i] + local_data[i+1] + local_data[i+2])/3;
-		}
-
-		// Changing the range of data to update
-		location -= halo_size;
+		receive_tag = (receive_tag + 1) % send_buffer_size;
 	}
 
 	MPI_Barrier(stream_comm);
@@ -209,6 +226,7 @@ int main(int argc, char *argv[])
 	free(local_data);
 	free(new);
 	free(send_buffer);
+	free(receive_buffer);
 
 	MPI_Finalize();
 
