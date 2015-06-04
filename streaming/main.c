@@ -2,6 +2,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <stdlib.h>
+#include <string.h>
 
 void initialise_data(double*, int);
 void IO(int, int, int, double*, char*);
@@ -25,6 +26,7 @@ int main(int argc, char *argv[])
 
 	int rank, size, i, j, k, location_send = array_size - halo_size, location_receive = array_size - halo_size, send_tag, receive_tag, leftover, flag, send_iterations = 0, receive_iterations = 0, index;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
+	size_t halo_bytes = halo_size*sizeof(double);
 
 	local_data = malloc((array_size+halo_size)*sizeof(double));
 	new = malloc((array_size+halo_size)*sizeof(double));
@@ -87,10 +89,7 @@ int main(int argc, char *argv[])
 		for(j=0;j<message_size;j++)
 		{
 			// Copy data to send buffer 
-			for(i=0;i<halo_size;i++)
-			{
-				send_buffer[halo_size*message_size*send_tag+j*halo_size+i] = local_data[i];
-			}
+			memcpy(&send_buffer[halo_size*message_size*send_tag+j*halo_size],local_data,halo_bytes);
 
 			// Update all possible values (in place)
 			for(i=0;i<location_send;i++)
@@ -118,10 +117,7 @@ int main(int argc, char *argv[])
 			for(j=0;j<message_size;j++)
 			{
 				// Copy data from receive buffer
-				for(i=0;i<halo_size;i++)
-				{
-					local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+j*halo_size+i];
-				}
+				memcpy(&local_data[array_size],&receive_buffer[halo_size*message_size*receive_tag+j*halo_size],halo_bytes);	
 
 				// Update values on the edge of the triangle
 				for(i=0;i+receive_iterations<send_iterations;i++)
@@ -162,12 +158,8 @@ int main(int argc, char *argv[])
 		// Loop over all received data
 		for(j=0;j<message_size;j++)
 		{
-
 			// Copy from receive buffer
-			for(i=0;i<halo_size;i++)
-			{
-				local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+j*halo_size+i];
-			}
+			memcpy(&local_data[array_size],&receive_buffer[halo_size*message_size*receive_tag+j*halo_size],halo_bytes);
 
 			// Compute diagonal
 			for(i=array_size-halo_size;i>=0;i-=halo_size)
@@ -180,10 +172,7 @@ int main(int argc, char *argv[])
 			}
 
 			// Copy to send buffer
-			for(i=0;i<halo_size;i++)
-			{
-				send_buffer[halo_size*message_size*send_tag+j*halo_size+i] = local_data[i];
-			}
+			memcpy(&send_buffer[halo_size*message_size*send_tag+j*halo_size],local_data,halo_bytes);
 		}
 
 		// Begin new send and receive
@@ -209,10 +198,7 @@ int main(int argc, char *argv[])
 		for(j=0;j<message_size;j++)
 		{
 			// Copy data from receive buffer
-			for(i=0;i<halo_size;i++)
-			{
-				local_data[array_size+i] = receive_buffer[halo_size*message_size*receive_tag+j*halo_size+i];
-			}
+			memcpy(&local_data[array_size],&receive_buffer[halo_size*message_size*receive_tag+j*halo_size],halo_bytes);
 
 			// Update all possible values (in place)
 			for(i=location_receive;i<array_size;i++)
