@@ -2,6 +2,12 @@ CC = mpicc
 CFLAGS = -lm -fastsse
 
 default: halo_streaming
+	echo $(CC)
+
+vamp: CC = vtcc
+vamp: CFLAGS = -vt:cc mpicc -lm -fastsse
+vamp: halo_streaming
+	echo $(CC)
 
 halo_streaming: main.o
 	$(CC) $(CFLAGS) -o halo_streaming main.o

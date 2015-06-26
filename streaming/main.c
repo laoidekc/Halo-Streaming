@@ -16,9 +16,9 @@ int main(int argc, char *argv[])
 	int iterations = 1000000;
 	int send_buffer_size = 10;
 	int receive_buffer_size = 10;
-	int message_size = 1;
+	int message_size = 50;
 	int halo_size = 2;
-	int num_runs = 10;
+	int num_runs = 1;
 
 	// Output files
 	char stream_filename[20] = "out.bin";
@@ -39,8 +39,8 @@ int main(int argc, char *argv[])
 	MPI_Comm_dup(stream_comm,&exchange_comm);
 	MPI_Comm_rank(stream_comm, &rank);
 	MPI_Comm_size(stream_comm, &size);
-	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], request_left, request_right;
-	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], status_left, status_right;
+	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;
+	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;
 
 	if(rank == 0)
 	{
@@ -78,7 +78,8 @@ int main(int argc, char *argv[])
 		// Initialise non-blocking receives
 		for(receive_tag=0;receive_tag<receive_buffer_size;receive_tag++)
 		{
-			MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+			MPI_Recv_init(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+			MPI_Start(&request_receive[receive_tag]);
 		}
 
 		// Reset tags
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
 				}
 
 				// Begin new receive
-				MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+				MPI_Start(&request_receive[receive_tag]);
 
 				// Change tag
 				receive_tag = (receive_tag + 1) % receive_buffer_size;
@@ -190,8 +191,7 @@ int main(int argc, char *argv[])
 
 			// Begin new send and receive
 			MPI_Start(&request_send[send_tag]);
-
-			MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+			MPI_Start(&request_receive[receive_tag]);
 
 			// Increase tags
 			receive_tag = (receive_tag + 1) % receive_buffer_size;
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 			}
 
 			// Begin new receive
-			MPI_Irecv(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
+			MPI_Start(&request_receive[receive_tag]);
 
 			// Change tag
 			receive_tag = (receive_tag + 1) % receive_buffer_size;
@@ -267,20 +267,26 @@ int main(int argc, char *argv[])
 		for(j=0;j<iterations;j++)
 		{
 			// Send and receive halos
-			MPI_Issend(&local_data[1],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&request_left);
-			MPI_Issend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&request_right);
+			MPI_Isend(&local_data[1],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
+			MPI_Isend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
 
-			MPI_Recv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&status_right);
-			MPI_Recv(&local_data[0],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&status_left);
-
-			MPI_Wait(&request_left,&status_left);
-			MPI_Wait(&request_right,&status_right);
+			MPI_Irecv(&local_data[0],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
+			MPI_Irecv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
 
 			// Update data
-			for(i=1;i<=array_size;i++)
+			for(i=2;i<=array_size-1;i++)
 			{
 				new[i] = (local_data[i-1] + local_data[i] + local_data[i+1])/3;
 			}
+
+			MPI_Wait(&receive_request_left,&receive_status_left);
+			MPI_Wait(&receive_request_right,&receive_status_right);
+
+			new[1] = (local_data[0] + local_data[1] + local_data[2])/3;
+			new[array_size] = (local_data[array_size-1] + local_data[array_size] + local_data[array_size+1])/3;
+
+			MPI_Wait(&send_request_left,&send_status_left);
+			MPI_Wait(&send_request_right,&send_status_right);
 
 			// Swapping pointers to arrays
 			temporary = new;
@@ -322,11 +328,12 @@ int main(int argc, char *argv[])
 
 void initialise_data(double *local_data, int array_size)
 {
+	srand(227);
 	int i;
 
 	for(i=0;i<array_size;i++)
 	{
-		local_data[i] = (double)i;
+		local_data[i] = rand()%10000;
 	}
 }
 
