@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
 	int receive_buffer_size = 10;
 	int message_size = 50;
 	int halo_size = 2;
-	int num_runs = 1;
+	int num_runs = 10;
 
 	// Output files
 	char stream_filename[20] = "out.bin";
@@ -323,7 +323,7 @@ int main(int argc, char *argv[])
 
 	MPI_Finalize();
 
-	return;
+	return 0;
 }
 
 void initialise_data(double *local_data, int array_size)

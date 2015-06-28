@@ -1,7 +1,11 @@
-CC = mpicc
-CFLAGS = -lm -fastsse
+CC = cc
+CFLAGS = -lm
 
 default: halo_streaming
+	echo $(CC)
+
+archer: CC = cc
+archer: halo_streaming
 	echo $(CC)
 
 vamp: CC = vtcc
