@@ -1,4 +1,4 @@
-CC = cc
+CC = mpicc
 CFLAGS = -lm
 
 default: halo_streaming
