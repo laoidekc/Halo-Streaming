@@ -13,10 +13,10 @@ int main(int argc, char *argv[])
 
 	// Parameter declarations
 	int array_size = 100;
-	int iterations = 1000;
+	int iterations = 1000000;
 	int send_buffer_size = 10;
 	int receive_buffer_size = 10;
-	int message_size = 50;
+	int message_size = 25;
 	int halo_size = 2;
 	int num_runs = 10;
 
@@ -100,9 +100,6 @@ int main(int argc, char *argv[])
 		// Compute initial triangle
 		while(send_iterations<triangle_iterations)
 		{
-			MPI_Get_processor_name(proc_name,&length);
-			printf("Processor %i ID: %s\n",rank,proc_name);
-
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
 
