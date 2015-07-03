@@ -23,6 +23,9 @@ int main(int argc, char *argv[])
 	// Output files
 	char stream_filename[20] = "out.bin";
 	char halo_filename[20] = "halo_out.bin";
+	char output_filename[20] = "data.txt";
+	strcat(output_filename, &argv[1]);
+
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
@@ -47,7 +50,7 @@ int main(int argc, char *argv[])
 
 	if(rank == 0)
 	{
-		f = fopen("data.txt", "w");
+		f = fopen(output_filename, "w");
 		fprintf(f,"Array size: %i\t\tIterations: %i\t\tMessage size: %i\t\tProcessors used: %i\n",array_size,iterations,message_size,size);
 		fprintf(f,"Stream time\tExchange time\n");
 	}
