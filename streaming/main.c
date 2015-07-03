@@ -23,8 +23,9 @@ int main(int argc, char *argv[])
 	// Output files
 	char stream_filename[20] = "out.bin";
 	char halo_filename[20] = "halo_out.bin";
-	char output_filename[20] = "data.txt";
-	strcat(output_filename, &argv[1]);
+	char output_filename[20] = "data";
+	strcat(output_filename, argv[1]);
+	strcat(output_filename, ".txt");
 
 	FILE *f;
 

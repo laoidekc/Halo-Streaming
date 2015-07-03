@@ -20,4 +20,4 @@ main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
 
 clean:
-	$(RM) halo_streaming *.o *~ out.dat out.bin halo_out.dat halo_out.bin
+	$(RM) halo_streaming *.o *~ out.dat out.bin halo_out.dat halo_out.bin *.bolt
