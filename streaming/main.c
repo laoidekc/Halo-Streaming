@@ -12,11 +12,11 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 100;
-	int iterations = 1000000;
+	int array_size = 1638400;
+	int iterations = 10000;
 	int send_buffer_size = 10;
 	int receive_buffer_size = 10;
-	int message_size = 25;
+	int message_size = 50;
 	int halo_size = 2;
 	int num_runs = 10;
 
@@ -36,11 +36,6 @@ int main(int argc, char *argv[])
 	int length;
 	char proc_name[20];
 
-	local_data = malloc((array_size+halo_size)*sizeof(double));
-	new = malloc((array_size+halo_size)*sizeof(double));
-	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));
-	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));
-
 	MPI_Comm stream_comm = MPI_COMM_WORLD;
 	MPI_Comm exchange_comm;
 	MPI_Comm_dup(stream_comm,&exchange_comm);
@@ -48,6 +43,14 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(stream_comm, &size);
 	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;
 	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;
+
+	array_size = array_size/size;
+
+	local_data = malloc((array_size+halo_size)*sizeof(double));
+	new = malloc((array_size+halo_size)*sizeof(double));
+	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));
+	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));
+
 
 	if(rank == 0)
 	{
