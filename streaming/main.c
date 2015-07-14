@@ -12,46 +12,44 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 1638400;
-	int iterations = 10000;
-	int send_buffer_size = 10;
-	int receive_buffer_size = 10;
-	int message_size = 50;
-	int halo_size = 2;
-	int num_runs = 10;
+	int array_size = 1638400;		// Number of doubles per processor
+	int iterations = 10000;			// Length of simulation
+	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
+	int receive_buffer_size = 1000;	// Same thing for the receive buffer
+	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
+	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
+	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
 
 	// Output files
-	char stream_filename[20] = "out.bin";
-	char halo_filename[20] = "halo_out.bin";
-	char output_filename[20] = "data";
-	strcat(output_filename, argv[1]);
-	strcat(output_filename, ".txt");
+	char stream_filename[20] = "out.bin";		// Binary output of the final halo streaming data
+	char halo_filename[20] = "halo_out.bin";	// Binary output of the final halo exchange data
+	char output_filename[20] = "data";			// Will contain the timing results
+	strcat(output_filename, argv[1]);			
+	strcat(output_filename, ".txt");			
 
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
-	size_t halo_bytes = halo_size*sizeof(double);
 
-	int length;
-	char proc_name[20];
+	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
-	MPI_Comm stream_comm = MPI_COMM_WORLD;
-	MPI_Comm exchange_comm;
+	MPI_Comm stream_comm = MPI_COMM_WORLD;		// Communicator for all streaming communications
+	MPI_Comm exchange_comm;						// Communicator for all exchange communications
 	MPI_Comm_dup(stream_comm,&exchange_comm);
-	MPI_Comm_rank(stream_comm, &rank);
-	MPI_Comm_size(stream_comm, &size);
-	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;
-	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;
 
-	array_size = array_size/size;
+	MPI_Comm_rank(stream_comm, &rank);		// Assigns rank to each processor
+	MPI_Comm_size(stream_comm, &size);		// Number of processors involved
+	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;	// Request arrays are used for streaming, the rest for halo exchange.
+	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;		// Status arrays are used for streaming, the rest for halo exchange.
 
-	local_data = malloc((array_size+halo_size)*sizeof(double));
-	new = malloc((array_size+halo_size)*sizeof(double));
-	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));
-	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));
+	local_data = malloc((array_size+halo_size)*sizeof(double));		// Primary work buffer. Has enough space for the starting data plus one halo region.
+	new = malloc((array_size+halo_size)*sizeof(double));	// Secondary work buffer to be used in halo exchange.
+	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));		// Send buffer for halo streaming
+	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
 
 
+	// Master processor writes parameters to timing file
 	if(rank == 0)
 	{
 		f = fopen(output_filename, "w");
@@ -59,12 +57,14 @@ int main(int argc, char *argv[])
 		fprintf(f,"Stream time\tExchange time\n");
 	}
 
+	// Loop over number of trials
 	for(l=0;l<num_runs;l++)
 	{
-		location_send = array_size - halo_size;
-		location_receive = array_size - halo_size;
-		send_iterations = 0;
-		receive_iterations = 0;
+		location_send = array_size - halo_size;		// Denotes the point in the array past which the processor no longer has enough information to perform updates. Initialised to array_size - halo_size because there will be halo_size number of points that depend on data from the neighbouring processor.
+		location_receive = array_size - halo_size; // Denotes the start of the area that can be calculated when new data arrives.
+
+		send_iterations = 0;	// Number of iterations worth of data that have been sent
+		receive_iterations = 0;	// Number of iterations worth of data that have been received
 
 		// Number of iterations that can be completed without communication
 		int triangle_iterations = (int)fmin((double)array_size/halo_size,(double)iterations);
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 		int neighbour_left = (rank + size - 1) % size;
 		int neighbour_right = (rank + 1) % size;
 
-		// Position in global array
+		// Position in global array. This tracks how far the domain of a given processor shifts due to halo streaming.
 		int start_point = rank*array_size;
 
 		// Initialise local data
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 			MPI_Send_init(&send_buffer[halo_size*message_size*send_tag],halo_size*message_size,MPI_DOUBLE,neighbour_left,send_tag,stream_comm,&request_send[send_tag]);	
 		}
 
-		// Initialise non-blocking receives
+		// Initialise persistent receives
 		for(receive_tag=0;receive_tag<receive_buffer_size;receive_tag++)
 		{
 			MPI_Recv_init(&receive_buffer[halo_size*message_size*receive_tag],halo_size*message_size,MPI_DOUBLE,neighbour_right,receive_tag,stream_comm,&request_receive[receive_tag]);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
 
-			// Loop over all data to be sent	
+			// Completes iterations until a block of data to be sent is complete	
 			for(j=0;j<message_size;j++)
 			{
 				// Copy data to send buffer 
@@ -131,6 +131,8 @@ int main(int argc, char *argv[])
 			
 			// Change tag
 			send_tag = (send_tag + 1) % send_buffer_size;
+
+			// Updates the number of iterations that have been sent
 			send_iterations += message_size;
 
 			// Check if receive has completed
@@ -138,13 +140,13 @@ int main(int argc, char *argv[])
 		
 			if(flag)
 			{
-				// Loop over all received data
+				// Contines until all data from the message has been processed
 				for(j=0;j<message_size;j++)
 				{
 					// Copy data from receive buffer
 					memcpy(&local_data[array_size],&receive_buffer[halo_size*message_size*receive_tag+j*halo_size],halo_bytes);	
 
-					// Update values on the edge of the triangle
+					// Update all values that depend on the new data. Stops when it catches up with the data that has been processed for sending
 					for(i=0;i+receive_iterations<send_iterations;i++)
 					{
 						for(k=0;k<halo_size;k++)
@@ -156,9 +158,11 @@ int main(int argc, char *argv[])
 					receive_iterations++;
 				}
 
-				// Increase size of triangle that can be computed
+				// Increase size of triangle that can be computed, due to new information having arrived
 				location_send += halo_size*message_size;
 				triangle_iterations += message_size;
+
+				// Ensures that processor does not calculate past the final iteration
 				if(triangle_iterations>iterations)
 				{
 					triangle_iterations = iterations;
@@ -185,7 +189,7 @@ int main(int argc, char *argv[])
 				// Copy from receive buffer
 				memcpy(&local_data[array_size],&receive_buffer[halo_size*message_size*receive_tag+j*halo_size],halo_bytes);
 
-				// Compute diagonal
+				// Calculate all values that depend on the new data
 				for(i=array_size-halo_size;i>=0;i-=halo_size)
 				{
 					for(k=0;k<halo_size;k++)
@@ -207,6 +211,7 @@ int main(int argc, char *argv[])
 			receive_tag = (receive_tag + 1) % receive_buffer_size;
 			send_tag = (send_tag + 1) % send_buffer_size;
 
+			// Update iterations
 			receive_iterations += message_size;
 			send_iterations += message_size;
 		}
@@ -239,12 +244,13 @@ int main(int argc, char *argv[])
 			// Change tag
 			receive_tag = (receive_tag + 1) % receive_buffer_size;
 
+			// Update iterations
 			receive_iterations += message_size;
 		}
 
 		MPI_Barrier(stream_comm);
 
-		// End halo-streaming timing
+		// End halo-streaming timing and write time to file
 		if (rank == 0)
 		{
 			time = MPI_Wtime() - start_time;
@@ -283,18 +289,21 @@ int main(int argc, char *argv[])
 			MPI_Irecv(&local_data[0],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
 			MPI_Irecv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
 
-			// Update data
+			// Update central data
 			for(i=2;i<=array_size-1;i++)
 			{
 				new[i] = (local_data[i-1] + local_data[i] + local_data[i+1])/3;
 			}
 
+			// Wait until data has been received
 			MPI_Wait(&receive_request_left,&receive_status_left);
 			MPI_Wait(&receive_request_right,&receive_status_right);
 
+			// Update edge data
 			new[1] = (local_data[0] + local_data[1] + local_data[2])/3;
 			new[array_size] = (local_data[array_size-1] + local_data[array_size] + local_data[array_size+1])/3;
 
+			// Wait until data has been sent
 			MPI_Wait(&send_request_left,&send_status_left);
 			MPI_Wait(&send_request_right,&send_status_right);
 
@@ -306,7 +315,7 @@ int main(int argc, char *argv[])
 
 		MPI_Barrier(exchange_comm);
 
-		// End halo-exchange timing
+		// End halo-exchange timing and write time to file
 		if (rank == 0)
 		{
 			time = MPI_Wtime() - start_time;
@@ -326,6 +335,7 @@ int main(int argc, char *argv[])
 	free(send_buffer);
 	free(receive_buffer);
 
+	// Close timing file
 	if(rank == 0)
 	{
 		fclose(f);

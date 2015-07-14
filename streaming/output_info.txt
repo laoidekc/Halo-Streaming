@@ -1,0 +1,22 @@
+This file contains information about the performance data that has been generated.
+
+- outputs/big_array
+Each processor has an array of size 100000 and completes 10000 iterations.
+Each directory represents a different message size, with each file representing a different number of processors.
+Timings data from Morar.
+
+- outputs/small_array
+Same as big_array but withan array size of 100 and 1000000 iterations
+
+- outputs/archer/weak_scaling
+Contains weak scaling data with a local array size of 100 and 1000000 iterations.
+Data from both powers of 2 and multiples of 24.
+Timing data from Archer
+
+- outputs/archer/strong
+Strong scaling data with a global array size of 1638400 and 10000 iterations.
+Timing data from Archer
+
+- outputs/archer/1pernode
+Weak scaling with only one core used per node
+Timing data from Archer
