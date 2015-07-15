@@ -12,8 +12,8 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 1638400;		// Number of doubles per processor
-	int iterations = 10000;			// Length of simulation
+	int array_size = 100;		// Number of doubles per processor
+	int iterations = 1000000;			// Length of simulation
 	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 1000;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
-	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, time;
+	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs], exchange_time[num_runs], average_time = 0, deviation_time = 0;
 
 	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	{
 		f = fopen(output_filename, "w");
 		fprintf(f,"Array size: %i\t\tIterations: %i\t\tMessage size: %i\t\tProcessors used: %i\n",array_size,iterations,message_size,size);
-		fprintf(f,"Stream time\tExchange time\n");
+		fprintf(f,"Run\t\tStream time\tExchange time\n");
 	}
 
 	// Loop over number of trials
@@ -253,8 +253,8 @@ int main(int argc, char *argv[])
 		// End halo-streaming timing and write time to file
 		if (rank == 0)
 		{
-			time = MPI_Wtime() - start_time;
-			fprintf(f,"%f\t",time);
+			stream_time[l] = MPI_Wtime() - start_time;
+			fprintf(f,"%i\t\t%f\t",l,stream_time[l]);
 		}
 
 		// Find new position in global array
@@ -316,10 +316,10 @@ int main(int argc, char *argv[])
 		MPI_Barrier(exchange_comm);
 
 		// End halo-exchange timing and write time to file
-		if (rank == 0)
+		if(rank == 0)
 		{
-			time = MPI_Wtime() - start_time;
-			fprintf(f,"%f\n",time);
+			exchange_time[l] = MPI_Wtime() - start_time;
+			fprintf(f,"%f\n",exchange_time[l]);
 		}
 
 		// Find position in global array
@@ -327,6 +327,45 @@ int main(int argc, char *argv[])
 
 		// I/O operations
 		IO(start_point,array_size,size,&local_data[halo_size/2],halo_filename);
+	}
+
+	if(rank == 0)
+	{
+		for(l=0;l<num_runs;l++)
+		{
+			average_time += stream_time[l];
+		}
+		average_time = average_time/num_runs;
+
+		for(l=0;l<num_runs;l++)
+		{
+			deviation_time += (stream_time[l]-average_time)*(stream_time[l]-average_time);
+		}
+
+		deviation_time = sqrt(deviation_time/num_runs);
+
+		fprintf(f,"Average:\t%f\t",average_time);
+
+		average_time = 0;
+
+		for(l=0;l<num_runs;l++)
+		{
+			average_time += exchange_time[l];
+		}
+		average_time = average_time/num_runs;
+
+		fprintf(f,"%f\n",average_time);
+		fprintf(f,"Deviation:\t%f\t",deviation_time);
+		deviation_time = 0;
+
+		for(l=0;l<num_runs;l++)
+		{
+			deviation_time += (exchange_time[l]-average_time)*(exchange_time[l]-average_time);
+		}
+
+		deviation_time = sqrt(deviation_time/num_runs);
+
+		fprintf(f,"%f\n",deviation_time);
 	}
 
 	// Free arrays
