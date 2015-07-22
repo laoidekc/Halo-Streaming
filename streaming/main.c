@@ -13,24 +13,25 @@ int main(int argc, char *argv[])
 
 	// Parameter declarations
 	int array_size = 100;		// Number of doubles per processor
-	int iterations = 1000000;			// Length of simulation
+	int iterations = 100000;			// Length of simulation
 	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 1000;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
+	int halo_depth = 50;                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
 
 	// Output files
 	char stream_filename[20] = "out.bin";		// Binary output of the final halo streaming data
 	char halo_filename[20] = "halo_out.bin";	// Binary output of the final halo exchange data
 	char output_filename[20] = "data";			// Will contain the timing results
-	strcat(output_filename, argv[1]);			
+	//	strcat(output_filename, argv[1]);			
 	strcat(output_filename, ".txt");			
 
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
-	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs], exchange_time[num_runs], average_time = 0, deviation_time = 0;
+	double *local_data, *exchange_array, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs], exchange_time[num_runs], average_time = 0, deviation_time = 0;
 
 	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
@@ -43,8 +44,11 @@ int main(int argc, char *argv[])
 	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;	// Request arrays are used for streaming, the rest for halo exchange.
 	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;		// Status arrays are used for streaming, the rest for halo exchange.
 
-	local_data = malloc((array_size+halo_size)*sizeof(double));		// Primary work buffer. Has enough space for the starting data plus one halo region.
-	new = malloc((array_size+halo_size)*sizeof(double));	// Secondary work buffer to be used in halo exchange.
+	//	array_size = array_size/size;
+
+	local_data = malloc((array_size+halo_size)*sizeof(double));		// Primary work buffer for halo streaming. Has enough space for the starting data plus one halo region.
+	exchange_array = malloc((array_size+halo_size*halo_depth)*sizeof(double)); // Primary work buffer for halo exchange.
+	new = malloc((array_size+halo_size*halo_depth)*sizeof(double));	// Secondary work buffer to be used in halo exchange.
 	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));		// Send buffer for halo streaming
 	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
 
@@ -105,7 +109,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Compute initial triangle
-		while(send_iterations<triangle_iterations)
+	       	while(send_iterations<triangle_iterations)
 		{
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -270,7 +274,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Re-initialise data for halo-exchange
-		initialise_data(&local_data[halo_size/2],array_size);
+		initialise_data(&exchange_array[halo_size*halo_depth/2],array_size);
 
 		MPI_Barrier(exchange_comm);
 
@@ -280,38 +284,40 @@ int main(int argc, char *argv[])
 			start_time = MPI_Wtime();
 		}
 
-		for(j=0;j<iterations;j++)
+	       	for(j=0;j<iterations;j+=halo_depth)
 		{
 			// Send and receive halos
-			MPI_Isend(&local_data[1],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
-			MPI_Isend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
+			MPI_Isend(&exchange_array[halo_depth],halo_depth,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
+			MPI_Isend(&exchange_array[array_size+halo_depth],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
 
-			MPI_Irecv(&local_data[0],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
-			MPI_Irecv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
-
-			// Update central data
-			for(i=2;i<=array_size-1;i++)
-			{
-				new[i] = (local_data[i-1] + local_data[i] + local_data[i+1])/3;
-			}
+			MPI_Irecv(&exchange_array[0],halo_depth,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
+			MPI_Irecv(&exchange_array[array_size+halo_depth+1],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
 
 			// Wait until data has been received
 			MPI_Wait(&receive_request_left,&receive_status_left);
 			MPI_Wait(&receive_request_right,&receive_status_right);
-
-			// Update edge data
-			new[1] = (local_data[0] + local_data[1] + local_data[2])/3;
-			new[array_size] = (local_data[array_size-1] + local_data[array_size] + local_data[array_size+1])/3;
-
 			// Wait until data has been sent
 			MPI_Wait(&send_request_left,&send_status_left);
 			MPI_Wait(&send_request_right,&send_status_right);
 
-			// Swapping pointers to arrays
-			temporary = new;
-			new = local_data;
-			local_data = temporary;
-		}
+			for(k=1;k<=halo_depth;k++)
+			{
+			  
+			  // Update central data
+			  for(i=k;i<=array_size+halo_size*halo_depth-k;i++)
+			    {
+			      new[i] = (exchange_array[i-1] + exchange_array[i] + exchange_array[i+1])/3;
+			    }
+
+			  // Update edge data
+			  // new[1] = (local_data[0] + local_data[1] + local_data[2])/3;
+			  // new[array_size] = (local_data[array_size-1] + local_data[array_size] + local_data[array_size+1])/3;
+			  // Swapping pointers to arrays
+			  temporary = new;
+			  new = exchange_array;
+			  exchange_array = temporary;
+			}
+	       	}
 
 		MPI_Barrier(exchange_comm);
 
@@ -326,7 +332,7 @@ int main(int argc, char *argv[])
 		start_point = array_size*rank;
 
 		// I/O operations
-		IO(start_point,array_size,size,&local_data[halo_size/2],halo_filename);
+		IO(start_point,array_size,size,&exchange_array[halo_size*halo_depth/2],halo_filename);
 	}
 
 	if(rank == 0)

@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[])
 {
-	unsigned int array_size = 100000000;
+	unsigned int array_size = 983040000;
 	int iterations = 10;
 
 	double *local_data, *new, *temp, time;
