@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
-	int halo_depth = 50;                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
+	int halo_depth = 10;                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
 
 	// Output files
 	char stream_filename[20] = "out.bin";		// Binary output of the final halo streaming data
@@ -284,14 +284,14 @@ int main(int argc, char *argv[])
 			start_time = MPI_Wtime();
 		}
 
-	       	for(j=0;j<iterations;j+=halo_depth)
+	    for(j=0;j<iterations;j+=halo_depth)
 		{
 			// Send and receive halos
 			MPI_Isend(&exchange_array[halo_depth],halo_depth,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
-			MPI_Isend(&exchange_array[array_size+halo_depth],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
+			MPI_Isend(&exchange_array[array_size],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
 
 			MPI_Irecv(&exchange_array[0],halo_depth,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
-			MPI_Irecv(&exchange_array[array_size+halo_depth+1],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
+			MPI_Irecv(&exchange_array[array_size+halo_depth],halo_depth,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
 
 			// Wait until data has been received
 			MPI_Wait(&receive_request_left,&receive_status_left);
@@ -301,10 +301,9 @@ int main(int argc, char *argv[])
 			MPI_Wait(&send_request_right,&send_status_right);
 
 			for(k=1;k<=halo_depth;k++)
-			{
-			  
+			{  
 			  // Update central data
-			  for(i=k;i<=array_size+halo_size*halo_depth-k;i++)
+			  for(i=k;i<array_size+halo_size*halo_depth-k;i++)
 			    {
 			      new[i] = (exchange_array[i-1] + exchange_array[i] + exchange_array[i+1])/3;
 			    }
@@ -312,12 +311,13 @@ int main(int argc, char *argv[])
 			  // Update edge data
 			  // new[1] = (local_data[0] + local_data[1] + local_data[2])/3;
 			  // new[array_size] = (local_data[array_size-1] + local_data[array_size] + local_data[array_size+1])/3;
+
 			  // Swapping pointers to arrays
 			  temporary = new;
 			  new = exchange_array;
 			  exchange_array = temporary;
 			}
-	       	}
+		}
 
 		MPI_Barrier(exchange_comm);
 
@@ -376,6 +376,7 @@ int main(int argc, char *argv[])
 
 	// Free arrays
 	free(local_data);
+	free(exchange_array);
 	free(new);
 	free(send_buffer);
 	free(receive_buffer);
