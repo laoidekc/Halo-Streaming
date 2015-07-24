@@ -12,20 +12,20 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 100;		// Number of doubles per processor
-	int iterations = 100000;			// Length of simulation
+	int array_size = 983040000;		// Number of doubles per processor
+	int iterations = 10000;			// Length of simulation
 	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 1000;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
-	int halo_depth = 10;                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
+	int halo_depth = atoi(argv[1]);                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
 
 	// Output files
 	char stream_filename[20] = "out.bin";		// Binary output of the final halo streaming data
 	char halo_filename[20] = "halo_out.bin";	// Binary output of the final halo exchange data
 	char output_filename[20] = "data";			// Will contain the timing results
-	//	strcat(output_filename, argv[1]);			
+       	strcat(output_filename, argv[1]);			
 	strcat(output_filename, ".txt");			
 
 	FILE *f;
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;	// Request arrays are used for streaming, the rest for halo exchange.
 	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;		// Status arrays are used for streaming, the rest for halo exchange.
 
-	//	array_size = array_size/size;
+       	array_size = array_size/size;
 
 	local_data = malloc((array_size+halo_size)*sizeof(double));		// Primary work buffer for halo streaming. Has enough space for the starting data plus one halo region.
 	exchange_array = malloc((array_size+halo_size*halo_depth)*sizeof(double)); // Primary work buffer for halo exchange.
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 	if(rank == 0)
 	{
 		f = fopen(output_filename, "w");
-		fprintf(f,"Array size: %i\t\tIterations: %i\t\tMessage size: %i\t\tProcessors used: %i\n",array_size,iterations,message_size,size);
+		fprintf(f,"Array size: %i\t\tIterations: %i\t\tMessage size: %i\t\tHalo depth: %i\tProcessors used: %i\n",array_size,iterations,message_size,halo_depth,size);
 		fprintf(f,"Run\t\tStream time\tExchange time\n");
 	}
 
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Compute initial triangle
-	       	while(send_iterations<triangle_iterations)
+		/*	while(send_iterations<triangle_iterations)
 		{
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
 
 			// Update iterations
 			receive_iterations += message_size;
-		}
+			}*/
 
 		MPI_Barrier(stream_comm);
 
