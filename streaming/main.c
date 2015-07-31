@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <math.h>
 #include <mpi.h>
@@ -13,13 +14,13 @@ int main(int argc, char *argv[])
 
 	// Parameter declarations
 	int array_size = 983040000;		// Number of doubles per processor
-	int iterations = 10000;			// Length of simulation
+	int iterations = 100000;			// Length of simulation
 	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 1000;	// Same thing for the receive buffer
-	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
+	int message_size = 5;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
-	int halo_depth = atoi(argv[1]);                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
+	int halo_depth = 10;                            // Number of data points the halo_exchange code will transfer. This should be 1 for normal halo exchange.
 
 	// Output files
 	char stream_filename[20] = "out.bin";		// Binary output of the final halo streaming data
@@ -109,7 +110,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Compute initial triangle
-		/*	while(send_iterations<triangle_iterations)
+	       	while(send_iterations<triangle_iterations)
 		{
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -250,7 +251,7 @@ int main(int argc, char *argv[])
 
 			// Update iterations
 			receive_iterations += message_size;
-			}*/
+			}
 
 		MPI_Barrier(stream_comm);
 
@@ -284,7 +285,7 @@ int main(int argc, char *argv[])
 			start_time = MPI_Wtime();
 		}
 
-	    for(j=0;j<iterations;j+=halo_depth)
+	         for(j=0;j<iterations;j+=halo_depth)
 		{
 			// Send and receive halos
 			MPI_Isend(&exchange_array[halo_depth],halo_depth,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
@@ -317,7 +318,7 @@ int main(int argc, char *argv[])
 			  new = exchange_array;
 			  exchange_array = temporary;
 			}
-		}
+			}
 
 		MPI_Barrier(exchange_comm);
 
