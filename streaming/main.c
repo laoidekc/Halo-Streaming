@@ -1,9 +1,9 @@
-
 #include <stdio.h>
 #include <math.h>
 #include <mpi.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 void initialise_data(double*, int);
 void IO(int, int, int, double*, char*);
@@ -13,8 +13,8 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 983040000;		// Number of doubles per processor
-	int iterations = 100000;			// Length of simulation
+	int array_size = 10000;		// Number of doubles per processor
+	int iterations = 1000000;			// Length of simulation
 	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 1000;	// Same thing for the receive buffer
 	int message_size = 5;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
-	double *local_data, *exchange_array, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs], exchange_time[num_runs], average_time = 0, deviation_time = 0;
+	double *local_data, *exchange_array, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs+1], exchange_time[num_runs+1], average_time = 0, deviation_time = 0;
 
 	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 	}
 
 	// Loop over number of trials
-	for(l=0;l<num_runs;l++)
+	for(l=0;l<num_runs+1;l++)
 	{
 		location_send = array_size - halo_size;		// Denotes the point in the array past which the processor no longer has enough information to perform updates. Initialised to array_size - halo_size because there will be halo_size number of points that depend on data from the neighbouring processor.
 		location_receive = array_size - halo_size; // Denotes the start of the area that can be calculated when new data arrives.
@@ -259,7 +259,15 @@ int main(int argc, char *argv[])
 		if (rank == 0)
 		{
 			stream_time[l] = MPI_Wtime() - start_time;
-			fprintf(f,"%i\t\t%f\t",l,stream_time[l]);
+
+			if(l==0)
+			{
+				fprintf(f,"Discarded:\t%f\t",stream_time[l]);
+			}
+			else
+			{
+				fprintf(f,"%i\t\t%f\t",l,stream_time[l]);
+			}
 		}
 
 		// Find new position in global array
@@ -338,13 +346,13 @@ int main(int argc, char *argv[])
 
 	if(rank == 0)
 	{
-		for(l=0;l<num_runs;l++)
+		for(l=1;l<=num_runs;l++)
 		{
 			average_time += stream_time[l];
 		}
 		average_time = average_time/num_runs;
 
-		for(l=0;l<num_runs;l++)
+		for(l=1;l<=num_runs;l++)
 		{
 			deviation_time += (stream_time[l]-average_time)*(stream_time[l]-average_time);
 		}
@@ -355,7 +363,7 @@ int main(int argc, char *argv[])
 
 		average_time = 0;
 
-		for(l=0;l<num_runs;l++)
+		for(l=1;l<=num_runs;l++)
 		{
 			average_time += exchange_time[l];
 		}
@@ -365,7 +373,7 @@ int main(int argc, char *argv[])
 		fprintf(f,"Deviation:\t%f\t",deviation_time);
 		deviation_time = 0;
 
-		for(l=0;l<num_runs;l++)
+		for(l=1;l<=num_runs;l++)
 		{
 			deviation_time += (exchange_time[l]-average_time)*(exchange_time[l]-average_time);
 		}
