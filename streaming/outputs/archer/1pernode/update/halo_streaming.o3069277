@@ -1,0 +1,18 @@
+--------------------------------------------------------------------------------
+*** s1430015   Job: 3069277.sdb   started: 06/08/15 00:56:14   host: mom1 ***
+*** s1430015   Job: 3069277.sdb   started: 06/08/15 00:56:14   host: mom1 ***
+*** s1430015   Job: 3069277.sdb   started: 06/08/15 00:56:14   host: mom1 ***
+*** s1430015   Job: 3069277.sdb   started: 06/08/15 00:56:14   host: mom1 ***
+
+--------------------------------------------------------------------------------
+Application 16687960 resources: utime ~323s, stime ~8s, Rss ~50276, inblocks ~54741, outblocks ~125788
+--------------------------------------------------------------------------------
+
+Resources requested: ncpus=192,place=free,walltime=00:10:00
+Resources allocated: cpupercent=0,cput=00:00:00,mem=6488kb,ncpus=192,vmem=141576kb,walltime=00:00:44
+
+*** s1430015   Job: 3069277.sdb   ended: 06/08/15 00:56:57   queue: standard ***
+*** s1430015   Job: 3069277.sdb   ended: 06/08/15 00:56:57   queue: standard ***
+*** s1430015   Job: 3069277.sdb   ended: 06/08/15 00:56:57   queue: standard ***
+*** s1430015   Job: 3069277.sdb   ended: 06/08/15 00:56:57   queue: standard ***
+--------------------------------------------------------------------------------
