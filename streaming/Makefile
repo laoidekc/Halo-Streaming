@@ -9,7 +9,7 @@ archer: halo_streaming
 	echo $(CC)
 
 vamp: CC = vtcc
-vamp: CFLAGS = -vt:cc mpicc -lm -fastsse
+vamp: CFLAGS = -vt:cc mpicc -lm
 vamp: halo_streaming
 	echo $(CC)
 
@@ -20,4 +20,4 @@ main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
 
 clean:
-	$(RM) halo_streaming *.o *~ out.dat out.bin halo_out.dat halo_out.bin *.bolt
+	$(RM) halo_streaming *.o *~ streaming_out.dat streaming_out.bin exchange_out.dat exchange_out.bin halo_streaming.bolt
