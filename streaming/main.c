@@ -56,7 +56,11 @@ int main(int argc, char *argv[])
 	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));		// Send buffer for halo streaming
 	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
 
-
+	// Parameters used for tracking buffer usage
+	int buffer_tracking_index=0; // Index into buffer_usage array
+	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
+	int buffer_usage[iterations/message_size]; // Tracks number of outstanind messages
+	
 	// Master processor writes parameters to timing file and prints Warnings if there are problems with any of the variables
 	if(rank == 0)
 	{
@@ -140,6 +144,9 @@ int main(int argc, char *argv[])
 		// Compute initial triangle
 		while(send_iterations<triangle_iterations)
 		{
+		  	MPI_Testsome(send_buffer_size,request_send,&buffer_usage[buffer_tracking_index],array_of_indices,status_send);
+			buffer_tracking_index++;
+
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
 
@@ -214,6 +221,9 @@ int main(int argc, char *argv[])
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
+		  	MPI_Testsome(send_buffer_size,request_send,&buffer_usage[buffer_tracking_index],array_of_indices,status_send);
+			buffer_tracking_index++;
+
 			// Wait for requests
 			MPI_Wait(&request_receive[receive_tag],&status_receive[receive_tag]);
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
