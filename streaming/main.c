@@ -12,13 +12,13 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 10000;			// Number of doubles per processor
+	int array_size = 1000;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
-	int iterations = 10000;			// Length of simulation
-	int send_buffer_size = 1000;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
-	int receive_buffer_size = 1000;	// Same thing for the receive buffer
+	int iterations = 1000;			// Length of simulation
+	int send_buffer_size = 5;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
+	int receive_buffer_size = 5;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
-	int num_runs = 10;				// Number of trials the program will perform for both halo streaming and halo exchange.
+	int num_runs = 1;				// Number of trials the program will perform for both halo streaming and halo exchange.
 
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 
@@ -57,9 +57,9 @@ int main(int argc, char *argv[])
 	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
 
 	// Parameters used for tracking buffer usage
-	int buffer_tracking_index=0; // Index into buffer_usage array
+	int buffer_tracking_index = 0; // Index into buffer_usage array
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
-	int buffer_usage[iterations/message_size]; // Tracks number of outstanind messages
+	int buffer_usage[iterations]; // Tracks number of outstanding messages
 	
 	// Master processor writes parameters to timing file and prints Warnings if there are problems with any of the variables
 	if(rank == 0)
@@ -144,7 +144,8 @@ int main(int argc, char *argv[])
 		// Compute initial triangle
 		while(send_iterations<triangle_iterations)
 		{
-		  	MPI_Testsome(send_buffer_size,request_send,&buffer_usage[buffer_tracking_index],array_of_indices,status_send);
+
+			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
 			buffer_tracking_index++;
 
 			// Wait for request to become available
@@ -221,7 +222,7 @@ int main(int argc, char *argv[])
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
-		  	MPI_Testsome(send_buffer_size,request_send,&buffer_usage[buffer_tracking_index],array_of_indices,status_send);
+			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
 			buffer_tracking_index++;
 
 			// Wait for requests
@@ -264,6 +265,9 @@ int main(int argc, char *argv[])
 		// Fill in remaining inverted triangle
 		while(receive_iterations<iterations)
 		{
+			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
+			buffer_tracking_index++;
+
 			// Wait for receive to complete
 			MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
 
@@ -291,7 +295,7 @@ int main(int argc, char *argv[])
 
 			// Update number of iterations received
 			receive_iterations += message_size;
-			}
+		}
 
 		MPI_Barrier(stream_comm);
 
@@ -439,6 +443,15 @@ int main(int argc, char *argv[])
 
 		// Write the exchange standard deviation to file
 		fprintf(f,"%f\n",deviation_time);
+
+		// Prints out number of outstanding receives (where non-zero)
+		for(i=0;i<buffer_tracking_index;i++)
+		{
+			if(buffer_usage[i]!=0)
+			{
+				printf("%i\t%i\n",i,buffer_usage[i]);
+			}
+		}
 	}
 
 	// Free arrays
