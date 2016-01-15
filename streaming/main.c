@@ -6,15 +6,16 @@
 
 void initialise_data(double*, int);
 void IO(int, int, int, double*, char*);
+void outstanding_receives(int, MPI_Request*, int*, int*, int*, MPI_Status*, int*);
 
 int main(int argc, char *argv[])
 {
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 1000;			// Number of doubles per processor
+	int array_size = 100;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
-	int iterations = 1000;			// Length of simulation
+	int iterations = 1000000;			// Length of simulation
 	int send_buffer_size = 5;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 5;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
@@ -57,10 +58,17 @@ int main(int argc, char *argv[])
 	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
 
 	// Parameters used for tracking buffer usage
-	int buffer_tracking_index = 0; // Index into buffer_usage array
+	int buffer_tracking_index = 0; 		// Index into buffer_usage array
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
-	int buffer_usage[iterations]; // Tracks number of outstanding messages
-	
+	int buffer_usage[iterations]; 		// Tracks number of outstanding messages
+	int max_outstanding = 0;		// Maximum number of outstaqnding messages found
+	int *gathered_max_outstanding;
+	if (rank==0)
+	{
+		gathered_max_outstanding = malloc((size)*sizeof(int));
+	}
+
+
 	// Master processor writes parameters to timing file and prints Warnings if there are problems with any of the variables
 	if(rank == 0)
 	{
@@ -145,8 +153,7 @@ int main(int argc, char *argv[])
 		while(send_iterations<triangle_iterations)
 		{
 
-			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
-			buffer_tracking_index++;
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
 
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -222,8 +229,7 @@ int main(int argc, char *argv[])
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
-			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
-			buffer_tracking_index++;
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
 
 			// Wait for requests
 			MPI_Wait(&request_receive[receive_tag],&status_receive[receive_tag]);
@@ -265,8 +271,7 @@ int main(int argc, char *argv[])
 		// Fill in remaining inverted triangle
 		while(receive_iterations<iterations)
 		{
-			MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[buffer_tracking_index],array_of_indices,status_receive);
-			buffer_tracking_index++;
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
 
 			// Wait for receive to complete
 			MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
@@ -320,6 +325,7 @@ int main(int argc, char *argv[])
 		// Perform I/O operations if it is the last trial
 		if(l == num_runs)
 		{
+			MPI_Gather(&max_outstanding,1,MPI_INT,gathered_max_outstanding,1,MPI_INT,0,stream_comm);
 			IO(start_point, array_size, size, local_data, stream_filename);
 		}
 
@@ -389,6 +395,7 @@ int main(int argc, char *argv[])
 		// Perform I/O operations if it is the last trial
 		if(l == num_runs)
 		{
+
 			IO(start_point,array_size,size,&local_data[halo_size/2],halo_filename);
 		}
 	}
@@ -443,17 +450,16 @@ int main(int argc, char *argv[])
 
 		// Write the exchange standard deviation to file
 		fprintf(f,"%f\n",deviation_time);
-
-		// Prints out number of outstanding receives (where non-zero)
-		for(i=0;i<buffer_tracking_index;i++)
-		{
-			if(buffer_usage[i]!=0)
-			{
-				printf("%i\t%i\n",i,buffer_usage[i]);
-			}
-		}
 	}
 
+	if(rank==0)
+	{
+		fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
+		for(i=0;i<size;i++)
+		{
+			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
+		}
+	}
 	// Free arrays
 	free(local_data);
 	free(new);
@@ -547,4 +553,14 @@ void IO(int start_point, int array_size, int size, double *local_data, char *fil
 	MPI_File_close(&fh);
 
 	MPI_Type_free(&filetype);
+}
+
+void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive, int *buffer_usage, int *buffer_tracking_index, int *array_of_indices, MPI_Status *status_receive, int *max_outstanding)
+{
+	MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[*buffer_tracking_index],array_of_indices,status_receive);
+	if(buffer_usage[*buffer_tracking_index]>*max_outstanding)
+	{
+		*max_outstanding = buffer_usage[*buffer_tracking_index];
+	}
+	*buffer_tracking_index++;
 }
