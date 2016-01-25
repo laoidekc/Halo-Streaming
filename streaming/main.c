@@ -13,11 +13,11 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 100;			// Number of doubles per processor
+	int array_size = 10000;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
-	int iterations = 1000000;			// Length of simulation
-	int send_buffer_size = 5;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
-	int receive_buffer_size = 5;	// Same thing for the receive buffer
+	int iterations = 100000;			// Length of simulation
+	int send_buffer_size = 100;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
+	int receive_buffer_size = 100;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
 	int num_runs = 1;				// Number of trials the program will perform for both halo streaming and halo exchange.
 
@@ -62,10 +62,15 @@ int main(int argc, char *argv[])
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
 	int buffer_usage[iterations]; 		// Tracks number of outstanding messages
 	int max_outstanding = 0;		// Maximum number of outstaqnding messages found
-	int *gathered_max_outstanding;
+	int *gathered_max_outstanding, **all_testsome_data;
 	if (rank==0)
 	{
 		gathered_max_outstanding = malloc((size)*sizeof(int));
+		all_testsome_data = malloc((iterations)*sizeof(int*));
+		for(i=0;i<iterations;i++)
+		{
+			all_testsome_data[i] = malloc((size)*sizeof(int));
+		}
 	}
 
 
@@ -326,6 +331,7 @@ int main(int argc, char *argv[])
 		if(l == num_runs)
 		{
 			MPI_Gather(&max_outstanding,1,MPI_INT,gathered_max_outstanding,1,MPI_INT,0,stream_comm);
+			MPI_Gather(&buffer_usage,iterations,MPI_INT,all_testsome_data,iterations,MPI_INT,0,stream_comm);
 			IO(start_point, array_size, size, local_data, stream_filename);
 		}
 
@@ -459,6 +465,25 @@ int main(int argc, char *argv[])
 		{
 			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
 		}
+
+		fprintf(f,"\nAll testsome data\n");
+
+		for(i=0;i<iterations;i++)
+		{
+			for(j=0;j<size;j++)
+			{
+				fprintf(f,"%i\t",all_testsome_data[i][j]);
+			}
+			fprintf(f,"\n");
+		}
+
+		for(i=0;i<iterations;i++)
+		{
+    			free(all_testsome_data[i]);
+		}
+
+		free(all_testsome_data);
+		free(gathered_max_outstanding);
 	}
 	// Free arrays
 	free(local_data);
