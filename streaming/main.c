@@ -61,10 +61,14 @@ int main(int argc, char *argv[])
 	int buffer_tracking_index = 0; 		// Index into buffer_usage array
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
 	int buffer_usage[iterations]; 		// Tracks number of outstanding messages
+	for(i=0;i<iterations;i++)
+	{
+		buffer_usage[i]=0;
+	}
 	int max_outstanding = 0;		// Maximum number of outstaqnding messages found
 	int *gathered_max_outstanding;
 	//int **all_testsome_data;
-	int all_testsome_data[iterations][size];
+	int all_testsome_data[size][iterations];
 	if (rank==0)
 	{
 		gathered_max_outstanding = malloc((size)*sizeof(int));
@@ -474,7 +478,7 @@ int main(int argc, char *argv[])
 		{
 			for(j=0;j<size;j++)
 			{
-				fprintf(f,"%i\t",all_testsome_data[i][j]);
+				fprintf(f,"%i\t",all_testsome_data[j][i]);
 			}
 			fprintf(f,"\n");
 		}
