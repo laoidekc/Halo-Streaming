@@ -593,5 +593,5 @@ void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive,
 	{
 		*max_outstanding = buffer_usage[*buffer_tracking_index];
 	}
-	*buffer_tracking_index++;
+	(*buffer_tracking_index)++;
 }
