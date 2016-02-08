@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 10000;			// Number of doubles per processor
+	int array_size = 100;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
 	int iterations = 1000;			// Length of simulation
 	int send_buffer_size = 100;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
@@ -60,15 +60,16 @@ int main(int argc, char *argv[])
 	// Parameters used for tracking buffer usage
 	int buffer_tracking_index = 0; 		// Index into buffer_usage array
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
-	int buffer_usage[iterations]; 		// Tracks number of outstanding messages
-	for(i=0;i<iterations;i++)
+	int buffer_usage_size = 2*iterations/message_size;
+	int buffer_usage[buffer_usage_size]; 		// Tracks number of outstanding messages
+	for(i=0;i<buffer_usage_size;i++)
 	{
 		buffer_usage[i]=0;
 	}
 	int max_outstanding = 0;		// Maximum number of outstaqnding messages found
 	int *gathered_max_outstanding;
 	//int **all_testsome_data;
-	int all_testsome_data[size][iterations];
+	int all_testsome_data[size][buffer_usage_size];
 	if (rank==0)
 	{
 		gathered_max_outstanding = malloc((size)*sizeof(int));
@@ -337,7 +338,7 @@ int main(int argc, char *argv[])
 		if(l == num_runs)
 		{
 			MPI_Gather(&max_outstanding,1,MPI_INT,gathered_max_outstanding,1,MPI_INT,0,stream_comm);
-			MPI_Gather(&buffer_usage,iterations,MPI_INT,&all_testsome_data,iterations,MPI_INT,0,stream_comm);
+			MPI_Gather(&buffer_usage,buffer_usage_size,MPI_INT,&all_testsome_data,buffer_usage_size,MPI_INT,0,stream_comm);
 			IO(start_point, array_size, size, local_data, stream_filename);
 		}
 
@@ -474,7 +475,7 @@ int main(int argc, char *argv[])
 
 		fprintf(f,"\nAll testsome data\n");
 
-		for(i=0;i<iterations;i++)
+		for(i=0;i<buffer_usage_size;i++)
 		{
 			for(j=0;j<size;j++)
 			{
