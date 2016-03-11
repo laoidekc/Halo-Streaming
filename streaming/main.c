@@ -24,12 +24,11 @@ int main(int argc, char *argv[])
 	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
 
 	// Output files
-	char stream_filename[20] = "streaming_out.bin";		// Binary output of the final halo streaming data
-	char halo_filename[20] = "exchange_out.bin";	// Binary output of the final halo exchange data
-	char output_filename[20] = "data";			// Will contain the timing results
-	strcat(output_filename, argv[1]);			// File identifier
+	char stream_filename[50] = "streaming_out.bin";		// Binary output of the final halo streaming data
+	char halo_filename[50] = "exchange_out.bin";	// Binary output of the final halo exchange data
+	char output_filename[50] = "data";			// Will contain the timing results
+       	strcat(output_filename, argv[1]);			// File identifier
 	strcat(output_filename, ".txt");			// File extension
-
 	FILE *f;
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
@@ -56,7 +55,6 @@ int main(int argc, char *argv[])
 	new = malloc((array_size+halo_size)*sizeof(double));	// Secondary work buffer to be used in halo exchange.
 	send_buffer = malloc((halo_size*message_size*send_buffer_size)*sizeof(double));		// Send buffer for halo streaming
 	receive_buffer = malloc((halo_size*message_size*receive_buffer_size)*sizeof(double));	// Receive buffer for halo streaming
-
 	// Parameters used for tracking buffer usage
 	int buffer_tracking_index = 0; 		// Index into buffer_usage array
 	int array_of_indices[send_buffer_size]; // Indices of outstanding messages
