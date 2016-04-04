@@ -6,16 +6,16 @@
 
 void initialise_data(double*, int);
 void IO(int, int, int, double*, char*);
-void outstanding_receives(int, MPI_Request*, int*, int*, int*, MPI_Status*, int*);
+void outstanding_receives(int, MPI_Request*, int*, int*, int*, MPI_Status*, int*, double*,double);
 
 int main(int argc, char *argv[])
 {
 	MPI_Init(NULL, NULL);
 
 	// Parameter declarations
-	int array_size = 100;			// Number of doubles per processor
+	int array_size = 100000;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
-	int iterations = 1000;			// Length of simulation
+	int iterations = 100000;			// Length of simulation
 	int send_buffer_size = 100;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 100;	// Same thing for the receive buffer
 	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
@@ -33,6 +33,10 @@ int main(int argc, char *argv[])
 
 	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs+1], exchange_time[num_runs+1], average_time = 0, deviation_time = 0;
+
+	double send_message_time[iterations/message_size];
+	double receive_message_time[2*iterations/message_size];
+	int message_index=0;
 
 	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
@@ -112,6 +116,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if(rank==size-1)
+	{
+		f = fopen("outcountdata.txt", "w");
+	}
+
 	// Loop over number of trials. The +1 means an extra trial is run. This is done so that the time of the first run can be discarded, as it often exhibits cache effects that the other trials do not.
 	for(l=0;l<num_runs+1;l++)
 	{
@@ -163,7 +172,7 @@ int main(int argc, char *argv[])
 		while(send_iterations<triangle_iterations)
 		{
 
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -186,6 +195,8 @@ int main(int argc, char *argv[])
 
 			// Start new send to transfer the data from the block of iterations that has just been completed
 			MPI_Start(&request_send[send_tag]);
+			send_message_time[message_index]=MPI_Wtime() - start_time;
+			message_index++;
 			
 			// Change tag to next send
 			send_tag = (send_tag + 1) % send_buffer_size;
@@ -239,7 +250,7 @@ int main(int argc, char *argv[])
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for requests
 			MPI_Wait(&request_receive[receive_tag],&status_receive[receive_tag]);
@@ -267,6 +278,9 @@ int main(int argc, char *argv[])
 
 			// Begin new send and receive
 			MPI_Start(&request_send[send_tag]);
+			send_message_time[message_index]=MPI_Wtime() - start_time;
+			message_index++;
+
 			MPI_Start(&request_receive[receive_tag]);
 
 			// Move to next set of tags
@@ -281,7 +295,7 @@ int main(int argc, char *argv[])
 		// Fill in remaining inverted triangle
 		while(receive_iterations<iterations)
 		{
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding);
+			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for receive to complete
 			MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
@@ -465,13 +479,18 @@ int main(int argc, char *argv[])
 
 	if(rank==0)
 	{
-		fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
+		/*fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
 		for(i=0;i<size;i++)
 		{
 			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
-		}
+		}*/
+		fprintf(f,"\nMessage times\n");
+		for(i=0;i<iterations/message_size;i++)
+		{
+			fprintf(f,"%i\t%lf\n",i,send_message_time[i]);
+		}		
 
-		fprintf(f,"\nAll testsome data\n");
+		/*fprintf(f,"\nAll testsome data\n");
 
 		for(i=0;i<buffer_usage_size;i++)
 		{
@@ -480,7 +499,7 @@ int main(int argc, char *argv[])
 				fprintf(f,"%i\t",all_testsome_data[j][i]);
 			}
 			fprintf(f,"\n");
-		}
+		}*/
 
 		/*for(i=0;i<iterations;i++)
 		{
@@ -489,6 +508,15 @@ int main(int argc, char *argv[])
 
 		free(all_testsome_data);*/
 		free(gathered_max_outstanding);
+	}
+
+	if(rank==size-1)
+	{
+		fprintf(f,"Outcount vs Timestamp\n");
+		for(i=0;i<buffer_tracking_index;i++)
+		{
+			fprintf(f,"%i\t%lf\n",buffer_usage[i],receive_message_time[i]);
+		}
 	}
 	// Free arrays
 	free(local_data);
@@ -585,7 +613,7 @@ void IO(int start_point, int array_size, int size, double *local_data, char *fil
 	MPI_Type_free(&filetype);
 }
 
-void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive, int *buffer_usage, int *buffer_tracking_index, int *array_of_indices, MPI_Status *status_receive, int *max_outstanding)
+void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive, int *buffer_usage, int *buffer_tracking_index, int *array_of_indices, MPI_Status *status_receive, int *max_outstanding, double* receive_message_time, double start_time)
 {
 	MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[*buffer_tracking_index],array_of_indices,status_receive);
 	if(buffer_usage[*buffer_tracking_index]>*max_outstanding)
@@ -593,4 +621,5 @@ void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive,
 		*max_outstanding = buffer_usage[*buffer_tracking_index];
 	}
 	(*buffer_tracking_index)++;
+	receive_message_time[*buffer_tracking_index]=MPI_Wtime()-start_time;
 }
