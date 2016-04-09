@@ -374,11 +374,11 @@ int main(int argc, char *argv[])
 	         for(j=0;j<iterations;j++)
 		{
 			// Send and receive halo data
-			MPI_Isend(&local_data[1],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&send_request_left);
-			MPI_Isend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&send_request_right);
+			MPI_Isend(&local_data[1],1,MPI_DOUBLE,neighbour_left,0,exchange_comm,&send_request_left);
+			MPI_Isend(&local_data[array_size],1,MPI_DOUBLE,neighbour_right,0,exchange_comm,&send_request_right);
 
-			MPI_Irecv(&local_data[0],1,MPI_DOUBLE,neighbour_left,j,exchange_comm,&receive_request_left);
-			MPI_Irecv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,j,exchange_comm,&receive_request_right);
+			MPI_Irecv(&local_data[0],1,MPI_DOUBLE,neighbour_left,0,exchange_comm,&receive_request_left);
+			MPI_Irecv(&local_data[array_size+1],1,MPI_DOUBLE,neighbour_right,0,exchange_comm,&receive_request_right);
 
 			// Update central data
 			for(i=2;i<=array_size-1;i++)
@@ -510,9 +510,8 @@ int main(int argc, char *argv[])
 		free(gathered_max_outstanding);
 	}
 
-	if(rank==size-1)
+	if(rank==15)
 	{
-		fprintf(f,"Outcount vs Timestamp\n");
 		for(i=0;i<buffer_tracking_index;i++)
 		{
 			fprintf(f,"%i\t%lf\n",buffer_usage[i],receive_message_time[i]);
