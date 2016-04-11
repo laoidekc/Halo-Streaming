@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from numpy import *
 
-data = loadtxt("outcount.dat")
+data = loadtxt("outcountdata.txt")
 
 def column(matrix, i):
     return [row[i] for row in matrix]

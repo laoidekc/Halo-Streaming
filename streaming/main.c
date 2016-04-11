@@ -247,6 +247,11 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		if(rank==size-1)
+		{
+			printf("Receive iteration = %i\n",receive_iterations);
+		}
+
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
@@ -291,6 +296,12 @@ int main(int argc, char *argv[])
 			receive_iterations += message_size;
 			send_iterations += message_size;
 		}
+
+		if(rank==size-1)
+		{
+				printf("Receive iteration = %i\n",receive_iterations);
+		}
+
 
 		// Fill in remaining inverted triangle
 		while(receive_iterations<iterations)
@@ -510,7 +521,7 @@ int main(int argc, char *argv[])
 		free(gathered_max_outstanding);
 	}
 
-	if(rank==15)
+	if(rank==size-1)
 	{
 		for(i=0;i<buffer_tracking_index;i++)
 		{
