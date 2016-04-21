@@ -490,16 +490,16 @@ int main(int argc, char *argv[])
 
 	if(rank==0)
 	{
-		/*fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
+		fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
 		for(i=0;i<size;i++)
 		{
 			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
-		}*/
-		fprintf(f,"\nMessage times\n");
+		}
+		/*fprintf(f,"\nMessage times\n");
 		for(i=0;i<iterations/message_size;i++)
 		{
 			fprintf(f,"%i\t%lf\n",i,send_message_time[i]);
-		}		
+		}*/		
 
 		/*fprintf(f,"\nAll testsome data\n");
 
