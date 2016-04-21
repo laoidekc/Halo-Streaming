@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if(rank==size-1)
+	if(rank==32)
 	{
 		f = fopen("outcountdata.txt", "w");
 	}
@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		if(rank==size-1)
+		if(rank==32)
 		{
 			printf("Receive iteration = %i\n",receive_iterations);
 		}
@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
 			send_iterations += message_size;
 		}
 
-		if(rank==size-1)
+		if(rank==32)
 		{
 				printf("Receive iteration = %i\n",receive_iterations);
 		}
@@ -490,11 +490,11 @@ int main(int argc, char *argv[])
 
 	if(rank==0)
 	{
-		fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
+		/*fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
 		for(i=0;i<size;i++)
 		{
 			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
-		}
+		}*/
 		/*fprintf(f,"\nMessage times\n");
 		for(i=0;i<iterations/message_size;i++)
 		{
@@ -521,7 +521,7 @@ int main(int argc, char *argv[])
 		free(gathered_max_outstanding);
 	}
 
-	if(rank==size-1)
+	if(rank==32)
 	{
 		for(i=0;i<buffer_tracking_index;i++)
 		{
