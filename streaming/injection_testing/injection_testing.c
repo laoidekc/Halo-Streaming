@@ -148,10 +148,10 @@ void calculation_delay(double *calculation_data, int calculation_size)
 	for(int i=0;i<calculation_size;i++)
 	{
 		// One calculation on each element of data
-		calculation_data[i] = calculation_data[i] + 1;
+		//calculation_data[i] = calculation_data[i] + 1;
 
 		// Multiple calculations on one data element
-		//calculation_data[0]++;
+		calculation_data[0]++;
 	}
 
 }

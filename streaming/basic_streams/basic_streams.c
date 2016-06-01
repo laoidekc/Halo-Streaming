@@ -12,9 +12,9 @@ int main(int argc, char *argv[])
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
-	char output_filename[22] = "basic_streams_output.dat";
+	char output_filename[25] = "basic_streams_output.dat";
 	FILE *f;
-	int i;
+	int i,j,k;
 
 	if(size != 3 && rank == 0)
 	{
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	double message_data[message_size];
 	for(i=0;i<message_size;i++)
 	{
-		message_data[i] = 0;
+		message_data[i] = rand()%10000;
 	}
 
 	double calculation_data[calculation_size];
@@ -78,6 +78,15 @@ int main(int argc, char *argv[])
 		{
 			MPI_Recv(message_data,message_size,MPI_DOUBLE,2,0,comm,MPI_STATUS_IGNORE);
 			// calculation here
+
+			memcpy(&calculation_data[calculation_size-message_size],message_data,message_size*sizeof(double));
+			for(j=calculation_size-message_size;j>=0;j-=message_size)
+			{
+				for(k=0;k<message_size;k++)
+				{
+					calculation_data[j+k] = (calculation_data[j+k-1] + calculation_data[j+k] + calculation_data[j+k+1])/3;
+				}
+			}
 			MPI_Send(message_data,message_size,MPI_DOUBLE,0,0,comm);
 			times[i+1] = MPI_Wtime();
 		}
@@ -87,10 +96,10 @@ int main(int argc, char *argv[])
 		fprintf(f,"#Messages:\t%i\n#Message Size\t%i\n#Calculation\t%i\n#Index\t\tWalltime\t\tGap\n#0\t\t%lf\n",num_messages,message_size,calculation_size,times[0]);
 		for(i=1;i<num_messages+1;i++)
 		{
-			fprintf(f,"%i\t\t%lf\t\t%lf\n",i,receive_times[i],times[i]-times[i-1]);
+			fprintf(f,"%i\t\t%lf\t\t%lf\n",i,times[i],times[i]-times[i-1]);
 		}
 		fclose(f);
-		printf("Proc 1 finished I/O"\n);
+		printf("Proc 1 finished I/O\n");
 	}
 
 	else
