@@ -10,4 +10,4 @@ basic_streams.o: basic_streams.c
 	$(CC) $(CFLAGS) -c basic_streams.c
 
 clean:
-	$(RM) basic_streams *.o *~ basic_streams_output.dat
+	$(RM) basic_streams *.o *~ output_basic_streams.dat

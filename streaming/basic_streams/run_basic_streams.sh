@@ -1,4 +1,4 @@
-#PBS -l walltime=02:00:00
+#PBS -l walltime=00:20:00
 #PBS -j oe
 cd $PBS_O_WORKDIR
 
@@ -11,7 +11,7 @@ echo 'Running MPI program' $MPIPROG 'on ' $num_procs ' processes'
 echo 'Started at' `date`
 echo '--------------------------------------------------------------------------------'
 
-(time aprun -n $num_procs ./basic_streams 1000000 2 1000000) 2>&1
+(time aprun -n $num_procs ./basic_streams 300000 2 1000000) 2>&1
 
 echo '--------------------------------------------------------------------------------'
 echo 'Finished at' `date`
