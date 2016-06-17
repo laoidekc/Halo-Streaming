@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 		printf("Proc 1 finished I/O\n");
 	}
 
-	else
+	else if(rank<3)
 	{
 		printf("Proc %i beginning cleanup\n",rank);
 		MPI_Waitall(num_messages,requests,MPI_STATUSES_IGNORE);
