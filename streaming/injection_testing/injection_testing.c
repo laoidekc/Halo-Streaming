@@ -36,9 +36,9 @@ int main(int argc, char *argv[])
 	FILE *f;
 	int i;
 
-	if(size != 2 && rank == 0)
+	if(size < 2 && rank == 0)
 	{
-		printf("Must be run on exactly two processes\n");
+		printf("Must be run on two or more processes\n");
 		return 0;
 	}
 
