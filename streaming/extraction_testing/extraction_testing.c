@@ -30,6 +30,8 @@ int main(int argc, char *argv[])
 	strcat(extraction_filename,argv[2]);
 	strcat(extraction_filename,"_CS");
 	strcat(extraction_filename,argv[3]);
+	strcat(extraction_filename,"_NP");
+	strcat(extraction_filename,argv[4]);
 	strcat(extraction_filename,time_string);
 	strcat(extraction_filename,".dat");
 
@@ -42,7 +44,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	if(argc < 4 && rank == 0)
+	if(argc < 5 && rank == 0)
 	{
 		printf("Need to supply number of messages, message size, and amount of calculation as arguments\n");
 		return 0;
