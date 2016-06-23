@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 int main(int argc, char *argv[])
 {
@@ -12,7 +13,25 @@ int main(int argc, char *argv[])
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
-	char output_filename[25] = "output_basic_streams.dat";
+	char output_filename[128] = "output_basic_streams";
+	time_t current_time;
+	struct tm * time_info;
+	char time_string[21];
+	time(&current_time);
+	time_info = localtime(&current_time);
+	strftime(time_string,sizeof(time_string),"_%F_%H-%M-%S",time_info);
+
+	strcat(output_filename,"_NM");
+	strcat(output_filename,argv[1]);
+	strcat(output_filename,"_MS");
+	strcat(output_filename,argv[2]);
+	strcat(output_filename,"_CS");
+	strcat(output_filename,argv[3]);
+	strcat(output_filename,"_NP");
+	strcat(output_filename,argv[4]);
+	strcat(output_filename,time_string);
+	strcat(output_filename,".dat");
+
 	FILE *f;
 	int i,j,k;
 
@@ -22,7 +41,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	if(argc < 4 && rank == 0)
+	if(argc < 5 && rank == 0)
 	{
 		printf("Need to supply number of messages, message size, and amount of calculation as arguments\n");
 		return 0;
