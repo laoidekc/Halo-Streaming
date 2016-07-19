@@ -1,11 +1,11 @@
-Array size per process: 100000		Iterations: 100000		Message size: 50		Processes used: 320
-Run		Stream time	Exchange time
-Discarded:	7.983237	11.802577
-Average:	0.000000	0.000000
-Deviation:	0.000000	0.000000
-
-Maximum unprocessed messages in buffer for each process:
-Process		Max Outstanding
+#Array size per process: 100000		Iterations: 100000		Message size: 50		Processes used: 320
+#Run		Stream time	Exchange time
+#Discarded:	7.983237	11.802577
+#Average:	0.000000	0.000000
+#Deviation:	0.000000	0.000000
+#
+#Maximum unprocessed messages in buffer for each process:
+#Process		Max Outstanding
 0		2
 1		2
 2		1
