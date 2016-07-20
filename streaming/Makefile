@@ -27,4 +27,4 @@ main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
 
 clean:
-	$(RM) halo_streaming *.o *~ streaming_out.dat streaming_out.bin exchange_out.dat exchange_out.bin halo_streaming.bolt core
+	$(RM) halo_streaming *.o *~ streaming_out*.dat streaming_out*.bin exchange_out*.dat exchange_out*.bin halo_streaming.bolt core

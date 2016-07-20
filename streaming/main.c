@@ -3,35 +3,65 @@
 #include <mpi.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-void initialise_data(double*, int);
-void IO(int, int, int, double*, char*);
-void outstanding_receives(int, MPI_Request*, int*, int*, int*, MPI_Status*, int*, double*,double);
+#define array_size 100000
+#define per_process 1
+#define iterations 100000
+#define send_buffer_size 100
+#define receive_buffer_size 100
+#define message_size 50
+//#define num_runs 0
+#define halo_size 2
+
+void initialise_data(double*);
+void IO(int, int, double*, char*);
+void outstanding_receives(MPI_Request*, int*, int*, int*, MPI_Status*, int*, double*,double);
+void filename_set(char*, char*, char*, char*);
 
 int main(int argc, char *argv[])
 {
 	MPI_Init(NULL, NULL);
 
-	// Parameter declarations
+	/*// Parameter declarations
 	int array_size = 100000;			// Number of doubles per processor
 	int per_process = 1;			// Set equal to 1 if array_size is the number of data elements per process. Set equal to 0 if array_size is equal to the global number of elements
 	int iterations = 100000;			// Length of simulation
 	int send_buffer_size = 100;	// Number of requests that can be used to send data. Should be greater than the maximum number of expected outstanding messages
 	int receive_buffer_size = 100;	// Same thing for the receive buffer
-	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.
+	int message_size = 50;			// Number of iterations that are completed before performing communications. This number should divide evenly into both array_size and iterations. It also must be less than array_size/2.*/
 	int num_runs = 0;				// Number of trials the program will perform for both halo streaming and halo exchange.
 
-	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.
+/*	int halo_size = 2;				// Number of data points contained in a processor's halo region. This is the sum of the halo regions in both directions.*/
+
+	int rank, size;
+
+	MPI_Comm stream_comm = MPI_COMM_WORLD;		// Communicator for all streaming communications
+	MPI_Comm exchange_comm;						// Communicator for all exchange communications
+	MPI_Comm_dup(stream_comm,&exchange_comm);
+
+	MPI_Comm_rank(stream_comm, &rank);		// Assigns rank to each processor
+	MPI_Comm_size(stream_comm, &size);		// Number of processors involved
 
 	// Output files
-	char stream_filename[50] = "streaming_out.bin";		// Binary output of the final halo streaming data
-	char halo_filename[50] = "exchange_out.bin";	// Binary output of the final halo exchange data
-	char output_filename[50] = "data";			// Will contain the timing results
-       	strcat(output_filename, argv[1]);			// File identifier
-	strcat(output_filename, ".txt");			// File extension
+	char stream_filename[256] = "streaming_out";		// Binary output of the final halo streaming data
+	char halo_filename[256] = "exchange_out";	// Binary output of the final halo exchange data
+	char output_filename[256] = "data";			// Will contain the timing results
+
+	time_t current_time;
+	struct tm * time_info;
+	char time_string[21];
+	time(&current_time);
+	time_info = localtime(&current_time);
+	strftime(time_string,sizeof(time_string),"_%F_%H-%M-%S",time_info);
+
+//update filenames here
+	filename_set(stream_filename,time_string,".bin",argv[1]);
+	filename_set(halo_filename,time_string,".bin",argv[1]);
+	filename_set(output_filename,time_string,".txt",argv[1]);
 	FILE *f;
 
-	int rank, size, i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
+	int i, j, k, l, location_send, location_receive, send_tag, receive_tag, leftover, flag, send_iterations, receive_iterations, index;
 	double *local_data, *new, *temporary, *send_buffer, *receive_buffer, start_time, stream_time[num_runs+1], exchange_time[num_runs+1], average_time = 0, deviation_time = 0;
 
 	double send_message_time[iterations/message_size];
@@ -40,20 +70,14 @@ int main(int argc, char *argv[])
 
 	size_t halo_bytes = halo_size*sizeof(double);	// Size of halo region. Will be used later for various memcpys.
 
-	MPI_Comm stream_comm = MPI_COMM_WORLD;		// Communicator for all streaming communications
-	MPI_Comm exchange_comm;						// Communicator for all exchange communications
-	MPI_Comm_dup(stream_comm,&exchange_comm);
-
-	MPI_Comm_rank(stream_comm, &rank);		// Assigns rank to each processor
-	MPI_Comm_size(stream_comm, &size);		// Number of processors involved
 	MPI_Request request_send[send_buffer_size], request_receive[receive_buffer_size], send_request_left, send_request_right, receive_request_left, receive_request_right;	// Request arrays are used for streaming, the rest for halo exchange.
 	MPI_Status status_send[send_buffer_size], status_receive[receive_buffer_size], send_status_left, send_status_right, receive_status_left, receive_status_right;		// Status arrays are used for streaming, the rest for halo exchange.
 
 	// Divides the array size between the processes if necessary
-	if(per_process == 0)
+	/*if(per_process == 0)
 	{
 		array_size = array_size/size;
-	}
+	}*/
 
 	local_data = malloc((array_size+halo_size)*sizeof(double));		// Primary work buffer. Has enough space for the starting data plus one halo region. Halo streaming stores its work data at the beginning of this array, with the halo region at the end reserved for incoming data. Halo exchange stores its work data in the centre of the array, with space at the beginning and end for halo data.
 	new = malloc((array_size+halo_size)*sizeof(double));	// Secondary work buffer to be used in halo exchange.
@@ -141,7 +165,7 @@ int main(int argc, char *argv[])
 		int start_point = rank*array_size;
 
 		// Initialise local data
-		initialise_data(local_data, array_size);
+		initialise_data(local_data);
 
 		// Initialise persistent sends, one for each send tag. These all point to different areas of the Send Buffer. These sends cannot be started as the data is not ready yet.
 		for(send_tag=0;send_tag<send_buffer_size;send_tag++)
@@ -172,7 +196,7 @@ int main(int argc, char *argv[])
 		while(send_iterations<triangle_iterations)
 		{
 
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
+			outstanding_receives(request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for request to become available
 			MPI_Wait(&request_send[send_tag],&status_send[send_tag]);
@@ -255,7 +279,7 @@ int main(int argc, char *argv[])
 		// Extend triangle until its peak reaches the maximum number of iterations
 		while(send_iterations<iterations)
 		{
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
+			outstanding_receives(request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for requests
 			MPI_Wait(&request_receive[receive_tag],&status_receive[receive_tag]);
@@ -306,7 +330,7 @@ int main(int argc, char *argv[])
 		// Fill in remaining inverted triangle
 		while(receive_iterations<iterations)
 		{
-			outstanding_receives(receive_buffer_size,request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
+			outstanding_receives(request_receive,buffer_usage,&buffer_tracking_index,array_of_indices,status_receive,&max_outstanding,receive_message_time,start_time);
 
 			// Wait for receive to complete
 			MPI_Wait(&request_receive[receive_tag], &status_receive[receive_tag]);
@@ -362,7 +386,7 @@ int main(int argc, char *argv[])
 		{
 			MPI_Gather(&max_outstanding,1,MPI_INT,gathered_max_outstanding,1,MPI_INT,0,stream_comm);
 			MPI_Gather(&buffer_usage,buffer_usage_size,MPI_INT,&all_testsome_data,buffer_usage_size,MPI_INT,0,stream_comm);
-			IO(start_point, array_size, size, local_data, stream_filename);
+			IO(start_point, size, local_data, stream_filename);
 		}
 
 		// Cancel all outstanding communications
@@ -372,7 +396,7 @@ int main(int argc, char *argv[])
 		}
 
 		// Re-initialise data for halo-exchange
-		initialise_data(&local_data[halo_size/2],array_size);
+		initialise_data(&local_data[halo_size/2]);
 
 		MPI_Barrier(exchange_comm);
 
@@ -432,7 +456,7 @@ int main(int argc, char *argv[])
 		if(l == num_runs)
 		{
 
-			IO(start_point,array_size,size,&local_data[halo_size/2],halo_filename);
+			IO(start_point,size,&local_data[halo_size/2],halo_filename);
 		}
 	}
 
@@ -490,11 +514,11 @@ int main(int argc, char *argv[])
 
 	if(rank==0)
 	{
-		/*fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
+		fprintf(f,"\nMaximum unprocessed messages in buffer for each process:\nProcess\t\tMax Outstanding\n");
 		for(i=0;i<size;i++)
 		{
 			fprintf(f,"%i\t\t%i\n",i,gathered_max_outstanding[i]);
-		}*/
+		}
 		/*fprintf(f,"\nMessage times\n");
 		for(i=0;i<iterations/message_size;i++)
 		{
@@ -521,13 +545,13 @@ int main(int argc, char *argv[])
 		free(gathered_max_outstanding);
 	}
 
-	if(rank==32)
+	/*if(rank==32)
 	{
 		for(i=0;i<buffer_tracking_index;i++)
 		{
 			fprintf(f,"%i\t%lf\n",buffer_usage[i],receive_message_time[i]);
 		}
-	}
+	}*/
 	// Free arrays
 	free(local_data);
 	free(new);
@@ -548,7 +572,7 @@ int main(int argc, char *argv[])
 
 
 // Initialise each element of the work buffer to a random integer. The RNG is seeded to make sure the numbers are the same for both the streaming and exchange trials
-void initialise_data(double *local_data, int array_size)
+void initialise_data(double *local_data)
 {
 	srand(227);
 	int i;
@@ -559,7 +583,7 @@ void initialise_data(double *local_data, int array_size)
 	}
 }
 
-void IO(int start_point, int array_size, int size, double *local_data, char *filename)
+void IO(int start_point, int size, double *local_data, char *filename)
 {
 	int amode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
 	MPI_File fh;
@@ -621,9 +645,10 @@ void IO(int start_point, int array_size, int size, double *local_data, char *fil
 	MPI_File_close(&fh);
 
 	MPI_Type_free(&filetype);
+	return;
 }
 
-void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive, int *buffer_usage, int *buffer_tracking_index, int *array_of_indices, MPI_Status *status_receive, int *max_outstanding, double* receive_message_time, double start_time)
+void outstanding_receives(MPI_Request *request_receive, int *buffer_usage, int *buffer_tracking_index, int *array_of_indices, MPI_Status *status_receive, int *max_outstanding, double* receive_message_time, double start_time)
 {
 	MPI_Testsome(receive_buffer_size,request_receive,&buffer_usage[*buffer_tracking_index],array_of_indices,status_receive);
 	if(buffer_usage[*buffer_tracking_index]>*max_outstanding)
@@ -632,4 +657,14 @@ void outstanding_receives(int receive_buffer_size, MPI_Request *request_receive,
 	}
 	(*buffer_tracking_index)++;
 	receive_message_time[*buffer_tracking_index]=MPI_Wtime()-start_time;
+	return;
+}
+
+void filename_set(char *filename, char *timeanddate, char *extension, char *num_procs)
+{
+	sprintf(filename,"%s_AS%i_IT%i_BS%i_MS%i_NP",filename,array_size,iterations,send_buffer_size,message_size);
+	strcat(filename,num_procs);
+	strcat(filename,timeanddate);
+	strcat(filename,extension);
+	return;
 }
