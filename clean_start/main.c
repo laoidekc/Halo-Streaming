@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 			{
 				MPI_Send_init(&send_buffer[halo_size*message_size*send_tag], // There are send_buffer_size number of Sends initialised. These are separated by halo_size*message_size in memory, which is the size of each message
 								halo_size*message_size,                      // Size of message
-								MPI_DOUBLE;                                  // MPI Datatype
+								MPI_DOUBLE,                                  // MPI Datatype
 								neighbour_left,                              // Receiver
 								send_tag,                                    // Message tag
 								stream_comm,                                 // Communicator
