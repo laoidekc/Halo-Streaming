@@ -1,6 +1,6 @@
 CC = mpicc
 CFLAGS = -lm
-DEPS = parameters.h io_functions.h
+DEPS = headers/parameters.h headers/io_functions.h
 OBJ = main.o parameters.o io_functions.o
 
 default: halo_streaming

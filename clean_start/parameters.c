@@ -1,4 +1,4 @@
-#include "parameters.h"
+#include "headers/parameters.h"
 
 int array_size=          100000;
 int per_process=         1;

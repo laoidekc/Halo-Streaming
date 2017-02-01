@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <mpi.h>
-#include "io_functions.h"
-#include "parameters.h"
+#include "headers/io_functions.h"
+#include "headers/parameters.h"
 
 // Used for marking the file with the parameters and timestamp
 void filename_set(char *filename, char *timeanddate, char *extension, char *num_procs)

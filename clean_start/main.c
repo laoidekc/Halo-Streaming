@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "parameters.h"
-#include "io_functions.h"
+#include "headers/parameters.h"
+#include "headers/io_functions.h"
 
 void initialise_data(double*);
 
