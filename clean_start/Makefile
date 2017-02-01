@@ -1,7 +1,7 @@
 CC = mpicc
 CFLAGS = -lm
-DEPS = parameters.h
-OBJ = main.o parameters.o
+DEPS = parameters.h io_functions.h
+OBJ = main.o parameters.o io_functions.o
 
 default: halo_streaming
 	echo $(CC)
